@@ -1,0 +1,15 @@
+{
+  "kind": "meta",
+  "topic": "roundhouse/tender01/meta",
+  "payload": {
+    "contract": "1.0",
+    "language": "pl",
+    "views_hash": "9f2c41aa"
+  },
+  "valid": true,
+  "decoded": {
+    "contract": "1.0",
+    "language": "pl",
+    "views_hash": "9f2c41aa"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "availability",
+  "topic": "roundhouse/tender01/availability",
+  "payload_text": "maybe",
+  "valid": false,
+  "error": "invalid"
+}

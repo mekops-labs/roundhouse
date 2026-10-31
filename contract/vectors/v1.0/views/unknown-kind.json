@@ -1,0 +1,62 @@
+{
+  "kind": "views",
+  "topic": "roundhouse/tender01/views",
+  "payload": {
+    "views": [
+      {
+        "path": "living",
+        "title": "Salon",
+        "layout": 0,
+        "tiles": [
+          {
+            "entity_id": "light.sufit",
+            "name": "Sufit",
+            "kind": "slider",
+            "domain": "light"
+          },
+          {
+            "entity_id": "scene.wieczor",
+            "name": "Wieczór",
+            "kind": "activate",
+            "domain": "scene"
+          },
+          {
+            "entity_id": "climate.pompa",
+            "name": "Pompa ciepła",
+            "kind": "readonly",
+            "domain": "climate",
+            "controls": [
+              {
+                "type": "hvac_mode",
+                "values": [
+                  "heat",
+                  "off"
+                ]
+              },
+              {
+                "type": "preset_mode",
+                "values": [
+                  "eco",
+                  "comfort"
+                ]
+              },
+              {
+                "type": "target_temperature"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "path": "1",
+        "title": "Ogród",
+        "layout": 1,
+        "tiles": []
+      }
+    ],
+    "snapshot_view": "living",
+    "skipped": 2
+  },
+  "valid": false,
+  "error": "invalid"
+}

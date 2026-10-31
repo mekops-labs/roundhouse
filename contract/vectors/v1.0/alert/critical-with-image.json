@@ -1,0 +1,58 @@
+{
+  "kind": "alert",
+  "topic": "roundhouse/tender01/alert/a1b2c3",
+  "payload": {
+    "title": "Ruch przy bramie",
+    "message": "Kamera wykryła osobę.",
+    "severity": "critical",
+    "time": 1792000000,
+    "read": false,
+    "actions": [
+      {
+        "id": "open",
+        "label": "Otwórz bramę",
+        "confirm": true
+      },
+      {
+        "id": "dismiss",
+        "label": "Zignoruj"
+      }
+    ],
+    "image": {
+      "width": 480,
+      "height": 270
+    },
+    "thumb": {
+      "width": 120,
+      "height": 68
+    }
+  },
+  "valid": true,
+  "decoded": {
+    "title": "Ruch przy bramie",
+    "message": "Kamera wykryła osobę.",
+    "severity": "critical",
+    "time": 1792000000,
+    "read": false,
+    "actions": [
+      {
+        "id": "open",
+        "label": "Otwórz bramę",
+        "confirm": true
+      },
+      {
+        "id": "dismiss",
+        "label": "Zignoruj",
+        "confirm": false
+      }
+    ],
+    "image": {
+      "width": 480,
+      "height": 270
+    },
+    "thumb": {
+      "width": 120,
+      "height": 68
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "entity_id": "light.sufit",
+    "action": "toggle"
+  },
+  "valid": false,
+  "error": "invalid"
+}

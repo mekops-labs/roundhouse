@@ -1,0 +1,17 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r1",
+    "entity_id": "light.sufit",
+    "action": "toggle"
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r1",
+    "entity_id": "light.sufit",
+    "action": "toggle",
+    "data": {},
+    "confirmed": false
+  }
+}

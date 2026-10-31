@@ -1,0 +1,19 @@
+{
+  "kind": "state",
+  "topic": "roundhouse/tender01/state/switch.pompa",
+  "payload": {
+    "text": "Off",
+    "on": false,
+    "available": true,
+    "icon": "mdi:lightbulb-off"
+  },
+  "valid": true,
+  "decoded": {
+    "text": "Off",
+    "on": false,
+    "available": true,
+    "icon": "mdi:lightbulb-off",
+    "color": null,
+    "attributes": {}
+  }
+}

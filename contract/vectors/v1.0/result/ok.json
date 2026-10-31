@@ -1,0 +1,13 @@
+{
+  "kind": "result",
+  "topic": "roundhouse/tender01/result",
+  "payload": {
+    "req": "r1",
+    "result": "ok"
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r1",
+    "result": "ok"
+  }
+}

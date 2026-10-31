@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mekops-labs/roundhouse/contract/schema.json",
+  "title": "Roundhouse panel contract, major version 1",
+  "description": "One definition per structured topic under $defs. Unknown fields are allowed everywhere: a minor version only adds fields.",
+  "$defs": {
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+    "rect": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 1},
+        {"type": "integer", "minimum": 1}
+      ],
+      "items": false,
+      "minItems": 4
+    },
+    "size": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "entity_id": {"type": "string", "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"},
+    "alert_id": {"type": "string", "pattern": "^[a-z0-9]{1,32}$"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "option": {
+      "type": "object",
+      "required": ["value", "label"],
+      "properties": {
+        "value": {"type": "string"},
+        "label": {"type": "string"}
+      }
+    },
+
+    "announce": {
+      "type": "object",
+      "required": [
+        "contract", "model", "fw", "wapp", "display", "chrome", "layouts",
+        "icon_px", "image_box", "thumb_box", "features", "limits"
+      ],
+      "properties": {
+        "contract": {"$ref": "#/$defs/version"},
+        "model": {"type": "string", "minLength": 1},
+        "fw": {"type": "string"},
+        "wapp": {"type": "string"},
+        "display": {
+          "type": "object",
+          "required": ["width", "height", "format"],
+          "properties": {
+            "width": {"type": "integer", "minimum": 1},
+            "height": {"type": "integer", "minimum": 1},
+            "format": {"enum": ["gray4", "rgb565"]}
+          }
+        },
+        "chrome": {
+          "type": "object",
+          "required": ["header", "tabs"],
+          "properties": {
+            "header": {"$ref": "#/$defs/rect"},
+            "tabs": {"$ref": "#/$defs/rect"}
+          }
+        },
+        "layouts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["columns", "slots"],
+            "properties": {
+              "columns": {"type": "integer", "minimum": 1},
+              "slots": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"$ref": "#/$defs/rect"}
+              }
+            }
+          }
+        },
+        "icon_px": {"type": "integer", "minimum": 1},
+        "image_box": {"$ref": "#/$defs/size"},
+        "thumb_box": {"$ref": "#/$defs/size"},
+        "features": {"type": "array", "items": {"type": "string"}},
+        "limits": {
+          "type": "object",
+          "required": ["max_payload"],
+          "properties": {"max_payload": {"type": "integer", "minimum": 1}}
+        }
+      }
+    },
+
+    "availability": {"enum": ["online", "offline"]},
+
+    "status": {
+      "type": "object",
+      "required": ["power_mode"],
+      "properties": {
+        "battery": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+        "charging": {"type": ["boolean", "null"]},
+        "power_mode": {"type": "string", "minLength": 1}
+      }
+    },
+
+    "meta": {
+      "type": "object",
+      "required": ["contract", "language", "views_hash"],
+      "properties": {
+        "contract": {"$ref": "#/$defs/version"},
+        "language": {"type": "string", "minLength": 1},
+        "views_hash": {"type": "string"}
+      }
+    },
+
+    "views": {
+      "type": "object",
+      "required": ["views", "snapshot_view", "skipped"],
+      "properties": {
+        "views": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "title", "layout", "tiles"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "title": {"type": "string"},
+              "layout": {"type": "integer", "minimum": 0},
+              "tiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["entity_id", "name", "kind", "domain"],
+                  "properties": {
+                    "entity_id": {"$ref": "#/$defs/entity_id"},
+                    "name": {"type": "string"},
+                    "kind": {"enum": ["toggle", "activate", "readonly"]},
+                    "domain": {"type": "string", "minLength": 1},
+                    "controls": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["type"],
+                        "properties": {
+                          "type": {"type": "string", "minLength": 1},
+                          "values": {"type": "array", "items": {"type": "string"}}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "snapshot_view": {"type": ["string", "null"]},
+        "skipped": {"type": "integer", "minimum": 0}
+      }
+    },
+
+    "state": {
+      "type": "object",
+      "required": ["text", "on", "available", "icon"],
+      "properties": {
+        "text": {"type": "string"},
+        "on": {"type": "boolean"},
+        "available": {"type": "boolean"},
+        "icon": {"type": "string", "minLength": 1},
+        "color": {
+          "type": ["array", "null"],
+          "items": {"type": "integer", "minimum": 0, "maximum": 255},
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "attributes": {"type": "object"}
+      }
+    },
+
+    "alert": {
+      "type": "object",
+      "required": ["title", "message", "severity", "time", "read", "actions"],
+      "properties": {
+        "title": {"type": "string"},
+        "message": {"type": "string"},
+        "severity": {"enum": ["critical", "warning", "event"]},
+        "time": {"type": "integer", "minimum": 0},
+        "read": {"type": "boolean"},
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "label": {"type": "string"},
+              "confirm": {"type": "boolean"}
+            }
+          }
+        },
+        "image": {"oneOf": [{"$ref": "#/$defs/size"}, {"type": "null"}]},
+        "thumb": {"oneOf": [{"$ref": "#/$defs/size"}, {"type": "null"}]}
+      }
+    },
+
+    "cmd": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["req", "entity_id", "action"],
+          "properties": {
+            "req": {"$ref": "#/$defs/request_id"},
+            "entity_id": {"$ref": "#/$defs/entity_id"},
+            "action": {"type": "string", "minLength": 1},
+            "data": {"type": "object"},
+            "confirmed": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["req", "alert", "action_id"],
+          "properties": {
+            "req": {"$ref": "#/$defs/request_id"},
+            "alert": {"$ref": "#/$defs/alert_id"},
+            "action_id": {"type": "string", "minLength": 1},
+            "confirmed": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["req", "ack"],
+          "properties": {
+            "req": {"$ref": "#/$defs/request_id"},
+            "ack": {"$ref": "#/$defs/alert_id"}
+          }
+        }
+      ]
+    },
+
+    "result": {
+      "type": "object",
+      "required": ["req", "result"],
+      "properties": {
+        "req": {"$ref": "#/$defs/request_id"},
+        "result": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

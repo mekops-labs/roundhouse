@@ -1,0 +1,22 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r3",
+    "entity_id": "climate.pompa",
+    "action": "set_temperature",
+    "data": {
+      "temperature": 22.5
+    }
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r3",
+    "entity_id": "climate.pompa",
+    "action": "set_temperature",
+    "data": {
+      "temperature": 22.5
+    },
+    "confirmed": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "kind": "state",
+  "topic": "roundhouse/tender01/state/light.sufit",
+  "payload": {
+    "text": "On · 80%",
+    "on": true,
+    "available": true,
+    "icon": "mdi:ceiling-light",
+    "color": [
+      255,
+      180,
+      80
+    ],
+    "attributes": {
+      "brightness": 204,
+      "color_temp": 370
+    }
+  },
+  "valid": true,
+  "decoded": {
+    "text": "On · 80%",
+    "on": true,
+    "available": true,
+    "icon": "mdi:ceiling-light",
+    "color": [
+      255,
+      180,
+      80
+    ],
+    "attributes": {
+      "brightness": 204,
+      "color_temp": 370
+    }
+  }
+}

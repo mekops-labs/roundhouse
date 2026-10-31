@@ -1,0 +1,19 @@
+{
+  "kind": "bitmap",
+  "topic": "roundhouse/wall01/alert/a1b2c3/image",
+  "format": "rgb565",
+  "width": 2,
+  "height": 2,
+  "payload_hex": "00f8e0071f00ffff",
+  "pixels": [
+    [
+      63488,
+      2016
+    ],
+    [
+      31,
+      65535
+    ]
+  ],
+  "valid": true
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "state",
+  "topic": "roundhouse/tender01/state/sensor.brak",
+  "payload": {
+    "text": "Unavailable",
+    "on": false,
+    "available": false,
+    "icon": "mdi:help-circle-outline"
+  },
+  "valid": true,
+  "decoded": {
+    "text": "Unavailable",
+    "on": false,
+    "available": false,
+    "icon": "mdi:help-circle-outline",
+    "color": null,
+    "attributes": {}
+  }
+}
