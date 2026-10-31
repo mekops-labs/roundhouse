@@ -1,0 +1,26 @@
+[tools]
+python = "3.14"
+uv = "latest"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.setup]
+description = "Install the test dependencies into .venv"
+run = "uv pip install -r requirements_test.txt"
+
+[tasks.lint]
+description = "Run ruff and mypy"
+run = ["ruff check .", "ruff format --check .", "mypy"]
+
+[tasks.fmt]
+description = "Format with ruff"
+run = "ruff format ."
+
+[tasks.test]
+description = "Run the test suite"
+run = "pytest -q"
+
+[tasks.check]
+description = "Lint, then test"
+depends = ["lint", "test"]

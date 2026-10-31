@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise run setup
+      - run: mise run lint
+
+  test:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.channel == 'beta' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: stable
+            ha: ""
+          - channel: previous
+            ha: "==2026.9.*"
+          - channel: beta
+            ha: "==2026.11.0b1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      # PHCC pins one HA release, so each channel resolves its own PHCC.
+      - if: matrix.ha == ''
+        run: mise run setup
+      - if: matrix.ha != ''
+        run: uv pip install --pre "homeassistant${{ matrix.ha }}" pytest-homeassistant-custom-component
+      - run: mise run test
