@@ -1,0 +1,36 @@
+# Contributing
+
+## Commits
+
+- Subject format: `{area}: {title}`. Areas: `feat`, `fix`, `refactor`, `test`,
+  `docs`, `build`.
+- Make one logical change in each commit.
+- Write one `- bullet` for each changed item when a commit holds several.
+- Do not add `Co-Authored-By` trailers.
+
+## Code
+
+- Run `mise run check` before every commit.
+- Format and lint with `ruff`. Type-check with `mypy --strict`.
+- Keep a comment to one line, three lines at most.
+- Run blocking work in the executor. A blocking-call warning fails a test.
+- Access an unstable Home Assistant internal from one module only.
+
+## Documentation
+
+- Write one instruction in each sentence.
+- Use the imperative for procedure steps.
+- Name the exact file, command, or value.
+- Do not record real IP addresses, MAC addresses, SSIDs, or credentials in any
+  file.
+
+## Confidentiality
+
+This repository is private until its first release. Do not write internal
+planning data into code, comments, commit messages, docs, or configuration:
+
+- No milestone labels, phase numbers, or sprint items.
+- No internal spec or section references.
+- No names or paths of private repositories or documents.
+
+State the technical fact directly. Public-standard references are permitted.
