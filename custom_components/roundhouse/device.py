@@ -1,0 +1,122 @@
+"""Runtime of one configured device."""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any
+
+from homeassistant.components import mqtt
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+
+from . import codec, issues
+from .const import CONF_DEVICE_ID, CONF_PROFILE, STALE_SETTLE_SECONDS
+from .publisher import Publisher
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class Device:
+    """Own the profile state and the retained topics of one device."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Initialize the device runtime."""
+        self._hass = hass
+        self._entry = entry
+        self.device_id: str = entry.data[CONF_DEVICE_ID]
+        self.profile: dict[str, Any] | None = entry.data.get(CONF_PROFILE)
+        self.error: str | None = None
+        max_payload = (self.profile or {}).get("limits", {}).get("max_payload", 65536)
+        self.publisher = Publisher(hass, self.device_id, max_payload)
+        self._unsubs: list[CALLBACK_TYPE] = []
+        self._was_connected = True
+
+    async def async_start(self) -> None:
+        """Subscribe, publish `meta`, and clear stale retained topics."""
+        self._unsubs.append(
+            await mqtt.async_subscribe(
+                self._hass,
+                f"roundhouse/{self.device_id}/announce",
+                self._on_announce,
+                qos=1,
+                encoding=None,
+            )
+        )
+        self._unsubs.append(
+            mqtt.async_subscribe_connection_status(self._hass, self._on_connection)
+        )
+        issues.check_mqtt_birth(self._hass)
+        await self.async_publish_all()
+        self._entry.async_create_background_task(
+            self._hass, self._async_clean_stale(), f"roundhouse stale {self.device_id}"
+        )
+
+    @callback
+    def async_stop(self) -> None:
+        """Unsubscribe."""
+        while self._unsubs:
+            self._unsubs.pop()()
+
+    def _meta(self) -> bytes:
+        return codec.encode(
+            {
+                "contract": f"{codec.SUPPORTED_MAJOR}.0",
+                "language": self._hass.config.language,
+                "views_hash": "",
+            }
+        )
+
+    async def async_publish_all(self) -> None:
+        """Publish everything this device should hold.
+
+        With a bad profile or a contract mismatch only `meta` is published.
+        """
+        await self.publisher.async_publish("meta", self._meta())
+        if self.error is not None:
+            await self.publisher.async_clear_all_except(frozenset({"meta"}))
+
+    async def _async_clean_stale(self) -> None:
+        await self.publisher.async_clear_stale(STALE_SETTLE_SECONDS)
+
+    @callback
+    def _on_connection(self, connected: bool) -> None:
+        if connected and not self._was_connected:
+            self._entry.async_create_background_task(
+                self._hass, self._async_resync(), f"roundhouse resync {self.device_id}"
+            )
+        self._was_connected = connected
+
+    async def _async_resync(self) -> None:
+        issues.check_mqtt_birth(self._hass)
+        await self.publisher.async_resync()
+
+    async def _on_announce(self, msg: mqtt.ReceiveMessage) -> None:
+        payload = msg.payload
+        if not isinstance(payload, bytes) or not payload:
+            return
+        try:
+            profile = codec.decode("announce", payload)
+        except codec.ContractError as err:
+            await self._on_bad_profile(err, payload)
+            return
+        self.error = None
+        issues.clear_profile_issue(self._hass, self.device_id)
+        if profile != self.profile:
+            _LOGGER.debug("Profile of %s changed", self.device_id)
+            self._hass.config_entries.async_update_entry(
+                self._entry, data={**self._entry.data, CONF_PROFILE: profile}
+            )
+
+    async def _on_bad_profile(self, err: codec.ContractError, payload: bytes) -> None:
+        detail = err.detail
+        if err.code == "major_mismatch":
+            try:
+                peer = json.loads(payload).get("contract")
+            except ValueError:
+                peer = None
+            detail = f"device {peer}, Roundhouse {codec.SUPPORTED_MAJOR}.x"
+        _LOGGER.warning("Device %s: %s", self.device_id, err)
+        self.error = err.code
+        issues.raise_profile_issue(self._hass, self.device_id, err.code, detail)
+        await self.async_publish_all()
