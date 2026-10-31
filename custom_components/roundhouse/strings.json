@@ -1,13 +1,58 @@
 {
   "config": {
+    "flow_title": "{model} {device_id}",
     "step": {
-      "user": {
-        "title": "Roundhouse",
-        "description": "Roundhouse devices are discovered over MQTT. No manual setup is needed."
+      "confirm": {
+        "title": "Add {model}",
+        "description": "Roundhouse found {model} ({device_id}). Choose the URL path of its dashboard. An existing dashboard with this path is used as it is.",
+        "data": {
+          "slug": "Dashboard URL path"
+        },
+        "data_description": {
+          "slug": "Lowercase letters, digits, and at least one hyphen."
+        }
       }
     },
+    "error": {
+      "invalid_slug": "Use lowercase letters and digits with at least one hyphen, for example tender-panel."
+    },
     "abort": {
-      "already_configured": "This device is already configured."
+      "already_configured": "This device is already configured.",
+      "discovery_only": "Roundhouse devices are discovered over MQTT. Power on the device and wait for it to be announced.",
+      "not_roundhouse": "The message is not a Roundhouse announce.",
+      "no_announce": "The device announce is empty.",
+      "invalid_profile": "The device profile is not usable: {detail}. See Repairs."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Roundhouse options",
+        "data": {
+          "snapshot_view": "Snapshot view",
+          "presence_grace_hours": "Presence grace (hours)",
+          "alert_max_count": "Maximum stored alerts",
+          "alert_max_age_days": "Maximum alert age (days)"
+        },
+        "data_description": {
+          "snapshot_view": "View a sleeping device refreshes. Leave empty for the first view.",
+          "presence_grace_hours": "How long an offline device still counts as home."
+        }
+      }
+    }
+  },
+  "issues": {
+    "profile_invalid": {
+      "title": "Device {device} sent an unusable profile",
+      "description": "Roundhouse cannot use the profile of {device}: {detail}. It publishes only the contract version to this device until the profile is fixed."
+    },
+    "contract_mismatch": {
+      "title": "Device {device} uses another contract version",
+      "description": "The contract versions do not match ({detail}). Update Roundhouse or the device. Roundhouse publishes only the contract version to this device until they match."
+    },
+    "mqtt_birth_disabled": {
+      "title": "The MQTT birth message is disabled",
+      "description": "Devices learn that Home Assistant is up from the birth message on homeassistant/status. Enable it in the MQTT integration options."
     }
   }
 }
