@@ -43,9 +43,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
-      # PHCC pins one HA release, so each channel resolves its own PHCC.
-      - if: matrix.ha == ''
-        run: mise run setup
-      - if: matrix.ha != ''
-        run: uv pip install --pre "homeassistant${{ matrix.ha }}" pytest-homeassistant-custom-component
+      - run: mise run setup
+      # The plugin pins one HA release, so the previous release resolves
+      # its own plugin version together with HA.
+      - if: matrix.channel == 'previous'
+        run: uv pip install "homeassistant${{ matrix.ha }}" pytest-homeassistant-custom-component
+      # No plugin release supports the beta yet; override HA only, so the
+      # job fails on the known import error and not on resolver backtracking.
+      - if: matrix.channel == 'beta'
+        run: uv pip install --pre "homeassistant${{ matrix.ha }}"
       - run: mise run test
