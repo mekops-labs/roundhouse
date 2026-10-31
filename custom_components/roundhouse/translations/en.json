@@ -1,5 +1,11 @@
 {
   "config": {
+    "step": {
+      "user": {
+        "title": "Roundhouse",
+        "description": "Roundhouse devices are discovered over MQTT. No manual setup is needed."
+      }
+    },
     "abort": {
       "already_configured": "This device is already configured."
     }
