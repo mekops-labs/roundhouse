@@ -1,0 +1,14 @@
+{
+  "domain": "roundhouse",
+  "name": "Roundhouse",
+  "codeowners": ["@mekops-labs"],
+  "config_flow": true,
+  "dependencies": ["mqtt", "lovelace"],
+  "documentation": "https://github.com/mekops-labs/roundhouse",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/mekops-labs/roundhouse/issues",
+  "mqtt": ["roundhouse/+/announce"],
+  "requirements": [],
+  "version": "0.0.0"
+}
