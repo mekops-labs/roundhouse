@@ -9,7 +9,9 @@ from typing import Any
 from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.storage import Store
 
 from . import codec, issues, layout
 from .alertmanager import AlertManager
@@ -19,6 +21,7 @@ from .const import (
     CONF_PROFILE,
     STALE_SETTLE_SECONDS,
     status_signal,
+    store_key,
     views_signal,
 )
 from .presencemanager import PresenceManager
@@ -27,6 +30,34 @@ from .statesync import StateSync
 from .viewsync import ViewSync
 
 _LOGGER = logging.getLogger(__name__)
+DEFAULT_MAX_PAYLOAD = 65536
+STORE_VERSION = 1
+
+
+async def async_purge(
+    hass: HomeAssistant, device_id: str, other_ids: frozenset[str]
+) -> None:
+    """Clear what a removed device leaves: retained topics, stores, and issues."""
+    publisher = Publisher(hass, device_id, DEFAULT_MAX_PAYLOAD)
+    try:
+        await publisher.async_clear_stale(STALE_SETTLE_SECONDS)
+    except HomeAssistantError as err:
+        _LOGGER.warning("Retained topics of %s not cleared: %s", device_id, err)
+    finally:
+        publisher.async_stop()  # nothing is left to retry for
+    alerts: Store[dict[str, Any]] = Store(
+        hass, STORE_VERSION, store_key(device_id, "alerts")
+    )
+    names = [
+        f"alert_{a['id']}"
+        for a in ((await alerts.async_load()) or {}).get("alerts", [])
+    ]
+    for name in [*names, "alerts", "views", "presence"]:
+        store: Store[dict[str, Any]] = Store(
+            hass, STORE_VERSION, store_key(device_id, name)
+        )
+        await store.async_remove()
+    issues.clear_device_issues(hass, device_id, other_ids)
 
 
 class Device:
@@ -40,7 +71,11 @@ class Device:
         self.profile: dict[str, Any] | None = entry.data.get(CONF_PROFILE)
         self.error: str | None = None
         self.views_payload: dict[str, Any] | None = None
-        max_payload = (self.profile or {}).get("limits", {}).get("max_payload", 65536)
+        max_payload = (
+            (self.profile or {})
+            .get("limits", {})
+            .get("max_payload", DEFAULT_MAX_PAYLOAD)
+        )
         self.publisher = Publisher(hass, self.device_id, max_payload)
         self._unsubs: list[CALLBACK_TYPE] = []
         self.views = ViewSync(hass, self)

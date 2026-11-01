@@ -134,6 +134,31 @@ def raise_overflow(
     )
 
 
+def clear_device_issues(
+    hass: HomeAssistant, device_id: str, other_ids: frozenset[str]
+) -> None:
+    """Remove every issue and notification of a removed device.
+
+    `other_ids` keeps the overflow issues of a device whose ID extends this one.
+    """
+    clear_profile_issue(hass, device_id)
+    clear_dashboard_issues(hass, device_id)
+    prefix = f"overflow_{device_id}_"
+    longer = [
+        p
+        for p in (f"overflow_{o}_" for o in other_ids)
+        if len(p) > len(prefix) and p.startswith(prefix)
+    ]
+    for domain, issue_id in list(ir.async_get(hass).issues):
+        if (
+            domain == DOMAIN
+            and issue_id.startswith(prefix)
+            and not any(issue_id.startswith(p) for p in longer)
+        ):
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
+            persistent_notification.async_dismiss(hass, issue_id)
+
+
 def clear_overflow(hass: HomeAssistant, device_id: str, path: str) -> None:
     """Remove the issue and the notification of a view."""
     issue_id = overflow_issue_id(device_id, path)

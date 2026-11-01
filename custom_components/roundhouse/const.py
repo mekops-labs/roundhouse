@@ -29,6 +29,11 @@ SEVERITIES = ("critical", "warning", "event")
 DEFAULT_SEVERITY = "event"
 
 
+def store_key(device_id: str, name: str) -> str:
+    """Return the `.storage` key of one of a device's stores."""
+    return f"{DOMAIN}.{device_id}.{name}"
+
+
 def alerts_signal(device_id: str) -> str:
     """Return the dispatcher signal sent when a device's alerts change."""
     return f"{DOMAIN}_alerts_{device_id}"

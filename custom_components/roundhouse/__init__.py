@@ -9,8 +9,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
 from . import preview, services
-from .const import DOMAIN
-from .device import Device
+from .const import CONF_DEVICE_ID, DOMAIN
+from .device import Device, async_purge
 from .deviceinfo import device_info
 from .panelreg import async_register_panel
 
@@ -54,3 +54,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clear the retained topics, stores, and issues of a removed device."""
+    device_id = entry.data[CONF_DEVICE_ID]
+    others = frozenset(
+        e.data[CONF_DEVICE_ID]
+        for e in hass.config_entries.async_entries(DOMAIN)
+        if e.entry_id != entry.entry_id
+    )
+    await async_purge(hass, device_id, others)

@@ -22,6 +22,7 @@ from .const import (
     OPT_ALERT_MAX_AGE_DAYS,
     OPT_ALERT_MAX_COUNT,
     alerts_signal,
+    store_key,
 )
 from .publisher import PayloadTooLargeError
 
@@ -48,7 +49,7 @@ class AlertManager:
         self._hass = hass
         self._device = device
         self._store: Store[dict[str, Any]] = Store(
-            hass, STORE_VERSION, f"roundhouse.{device.device_id}.alerts"
+            hass, STORE_VERSION, store_key(device.device_id, "alerts")
         )
         self._alerts: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
@@ -73,7 +74,7 @@ class AlertManager:
         return Store(
             self._hass,
             STORE_VERSION,
-            f"roundhouse.{self._device.device_id}.alert_{alert_id}",
+            store_key(self._device.device_id, f"alert_{alert_id}"),
         )
 
     def _limits(self) -> tuple[int, float]:

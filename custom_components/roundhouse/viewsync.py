@@ -11,7 +11,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
 from . import digest, issues, layout, lovelace_io
-from .const import CONF_SLUG, OPT_SNAPSHOT_VIEW
+from .const import CONF_SLUG, OPT_SNAPSHOT_VIEW, store_key
 from .debounce import Debounce
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ class ViewSync:
         self._device = device
         self._slug: str = device.entry.data[CONF_SLUG]
         self._store: Store[dict[str, Any]] = Store(
-            hass, STORE_VERSION, f"roundhouse.{device.device_id}.views"
+            hass, STORE_VERSION, store_key(device.device_id, "views")
         )
         self._last_good: dict[str, dict[str, Any]] = {}
         self._overflowing: set[str] = set()

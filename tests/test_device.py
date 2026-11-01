@@ -6,6 +6,7 @@ import asyncio
 import json
 from datetime import timedelta
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from homeassistant.components.mqtt.const import MQTT_CONNECTION_STATE
@@ -256,3 +257,74 @@ async def test_mqtt_birth_message_issue(
     found = ir.async_get(hass).async_get_issue(DOMAIN, "mqtt_birth_disabled")
     assert (found is not None) is issue
     await _settle(hass)
+
+
+async def test_removing_a_device_clears_its_topics_stores_and_issues(
+    hass: HomeAssistant,
+    mqtt_mock: Any,
+    hass_storage: dict[str, Any],
+    tender_profile: dict[str, Any],
+) -> None:
+    from homeassistant.helpers.storage import Store
+
+    from custom_components.roundhouse import issues
+    from custom_components.roundhouse.publisher import Publisher
+
+    entry = make_entry(tender_profile)
+    device = await _setup(hass, entry)
+    await _settle(hass)
+    alert_id = await device.alerts.async_add(title="t", message="m")
+    image: Store[dict[str, Any]] = Store(
+        hass, 1, f"roundhouse.tender01.alert_{alert_id}"
+    )
+    await image.async_save({"format": "gray4"})
+    issues.raise_dashboard_issue(hass, "tender01", "deleted")
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "overflow_tender01_home",
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key="view_overflow",
+    )
+    # Another device whose ID starts with this one keeps its issue.
+    make_entry(tender_profile, "tender01_x", "x").add_to_hass(hass)
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "overflow_tender01_x_home",
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key="view_overflow",
+    )
+    await hass.async_block_till_done()
+    assert {k for k in hass_storage if k.startswith("roundhouse.tender01.")}
+
+    started = asyncio.Event()
+    clear_stale = Publisher.async_clear_stale
+
+    async def watched(self: Publisher, settle: float) -> list[str]:
+        started.set()
+        return await clear_stale(self, settle)
+
+    with patch.object(Publisher, "async_clear_stale", watched):
+        removal = hass.async_create_task(
+            hass.config_entries.async_remove(entry.entry_id)
+        )
+        async with asyncio.timeout(5):
+            await started.wait()
+        for _ in range(5):
+            await asyncio.sleep(0)  # let the cleanup subscribe
+        for sub in ("meta", "views", f"alert/{alert_id}", "status"):
+            async_fire_mqtt_message(hass, PREFIX + sub, "x", retain=True)
+        await _settle(hass)
+        await removal
+
+    cleared = {t for t, p, _, r in published(mqtt_mock) if p == b"" and r}
+    assert {PREFIX + "meta", PREFIX + "views", PREFIX + f"alert/{alert_id}"} <= cleared
+    assert PREFIX + "status" not in cleared  # the device's own topic
+    assert not {k for k in hass_storage if k.startswith("roundhouse.tender01.")}
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "deleted_tender01") is None
+    assert registry.async_get_issue(DOMAIN, "overflow_tender01_home") is None
+    assert registry.async_get_issue(DOMAIN, "overflow_tender01_x_home") is not None

@@ -16,6 +16,7 @@ from .const import (
     DEFAULT_PRESENCE_GRACE_HOURS,
     OPT_PRESENCE_GRACE_HOURS,
     presence_signal,
+    store_key,
 )
 from .presence import Presence
 
@@ -38,7 +39,7 @@ class PresenceManager:
         self._hass = hass
         self._device = device
         self._store: Store[dict[str, Any]] = Store(
-            hass, STORE_VERSION, f"roundhouse.{device.device_id}.presence"
+            hass, STORE_VERSION, store_key(device.device_id, "presence")
         )
         hours = device.entry.options.get(
             OPT_PRESENCE_GRACE_HOURS, DEFAULT_PRESENCE_GRACE_HOURS
