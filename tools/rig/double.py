@@ -26,7 +26,10 @@ def main() -> None:
     parser.add_argument("profile", choices=PROFILES)
     parser.add_argument("--id", default=None)
     parser.add_argument("--seconds", type=int, default=600)
-    parser.add_argument("--port", type=int, default=18830)
+    parser.add_argument(
+        "--port", type=int, default=int(os.environ.get("RIG_MQTT_PORT", 18830))
+    )
+    parser.add_argument("--password", default=os.environ.get("RIG_DEVICE_PASSWORD"))
     args = parser.parse_args()
     device_id = args.id or ("tender01" if args.profile == "tender" else "wall01")
     path = REPO / f"contract/vectors/v1.0/announce/{PROFILES[args.profile]}.json"
@@ -37,6 +40,8 @@ def main() -> None:
         mqtt.CallbackAPIVersion.VERSION2, client_id=f"double-{device_id}"
     )
     prefix = f"roundhouse/{device_id}"
+    if args.password:  # broker login: the user name is the device ID
+        client.username_pw_set(device_id, args.password)
     client.will_set(f"{prefix}/availability", "offline", qos=1, retain=True)
 
     def on_connect(c: mqtt.Client, *_: object) -> None:

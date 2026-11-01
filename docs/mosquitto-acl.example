@@ -1,0 +1,25 @@
+# Roundhouse ACL for Mosquitto.
+#
+# Every device logs in to the broker with its device ID as the user name.
+# Home Assistant logs in as its own user. Roundhouse cannot check this file: it
+# is what stops one device from writing another device's topics.
+
+# Home Assistant: everything under roundhouse/, and its own status topic.
+user homeassistant
+topic readwrite homeassistant/#
+topic readwrite roundhouse/#
+
+# A device (%u is the user name, which is the device ID): it publishes its own
+# announce, availability, status, and commands, and reads what Roundhouse
+# publishes for it.
+pattern write roundhouse/%u/announce
+pattern write roundhouse/%u/availability
+pattern write roundhouse/%u/status
+pattern write roundhouse/%u/cmd
+pattern read roundhouse/%u/meta
+pattern read roundhouse/%u/views
+pattern read roundhouse/%u/state/#
+pattern read roundhouse/%u/icon/#
+pattern read roundhouse/%u/alert/#
+pattern read roundhouse/%u/result
+pattern read homeassistant/status

@@ -33,6 +33,22 @@ mise run rig -- logs
 mise run rig -- down
 ```
 
+## Soak and measurements
+
+`tools/soak/` runs two device doubles against a Home Assistant and a Mosquitto
+that applies the ACL of `docs/mosquitto-acl.example`. State lives in
+`~/.cache/roundhouse-dev/soak`; the rig and the soak can run side by side.
+
+```sh
+mise run soak -- --minutes 20      # a short run with restarts of both
+mise run soak -- --minutes 1440    # the 24-hour soak
+mise run measure                   # the latency budgets, into docs/measurements.md
+```
+
+The soak fails on a lost update, an unanswered command, a blocking-call warning,
+a Roundhouse error in the log, or a state that disagrees with Home Assistant at
+the end. It writes `report.json` to the soak directory.
+
 ## Documentation
 
 - Write one instruction in each sentence.

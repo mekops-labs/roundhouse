@@ -34,6 +34,14 @@ run = "python tools/rig/rig.py"
 description = "Run a device double: tender or wall"
 run = "python tools/rig/double.py"
 
+[tasks.soak]
+description = "Run the soak (QT-4): mise run soak -- --minutes 20"
+run = "python tools/soak/soak.py"
+
+[tasks.measure]
+description = "Measure the latency budgets and write docs/measurements.md"
+run = "python tools/soak/measure.py --write-docs"
+
 [tasks.check]
 description = "Lint, then test"
 depends = ["lint", "test", "test-js"]

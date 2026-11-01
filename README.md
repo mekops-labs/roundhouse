@@ -8,6 +8,11 @@ announced screen.
 
 Status: under development. No release yet.
 
+## Install
+
+See `docs/install.md`: HACS, the MQTT birth message, per-device broker logins, and
+the broker ACL that is the security control.
+
 ## Requirements
 
 - Home Assistant stable or the release before it.

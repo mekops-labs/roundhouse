@@ -30,12 +30,24 @@ import aiohttp
 
 REPO = Path(__file__).resolve().parents[2]
 RIG = Path(os.environ.get("RIG_DIR", Path.home() / ".cache/roundhouse-dev/rig"))
-HA_PORT, MQTT_PORT = 18123, 18830
+# A second instance (the soak) runs beside the first with another prefix and ports.
+PREFIX = os.environ.get("RIG_PREFIX", "rh")
+HA_PORT = int(os.environ.get("RIG_HA_PORT", 18123))
+MQTT_PORT = int(os.environ.get("RIG_MQTT_PORT", 18830))
+HA_NAME, MQTT_NAME = f"{PREFIX}-ha", f"{PREFIX}-mqtt"
+# With RIG_ACL=1 the broker needs a login and applies the documented ACL.
+ACL = os.environ.get("RIG_ACL") == "1"
+USERS = {
+    "homeassistant": "redacted",
+    "tender01": "redacted",
+    "tender02": "redacted",
+    "wall01": "redacted",
+}
 BASE = f"http://127.0.0.1:{HA_PORT}"
 CLIENT = f"{BASE}/"
 HA_IMAGE = "ghcr.io/home-assistant/home-assistant:stable"
 MQTT_IMAGE = "docker.io/library/eclipse-mosquitto:2"
-NET = "rhdev"
+NET = f"{PREFIX}dev"
 # The Playwright container image and the matching Python package.
 PLAYWRIGHT = "1.64.1"
 OWNER = {"name": "Rig", "username": "rig", "password": "redacted"}
@@ -50,6 +62,17 @@ homeassistant:
   unit_system: metric
   time_zone: Europe/Warsaw
   language: {language}
+input_boolean:
+  lamp1: {{name: Lamp 1}}
+  lamp2: {{name: Lamp 2}}
+  lamp3: {{name: Lamp 3}}
+  lamp4: {{name: Lamp 4}}
+  lamp5: {{name: Lamp 5}}
+  lamp6: {{name: Lamp 6}}
+input_number:
+  level1: {{name: Level 1, min: 0, max: 100, step: 1}}
+  level2: {{name: Level 2, min: 0, max: 100, step: 1}}
+  level3: {{name: Level 3, min: 0, max: 100, step: 1}}
 logger:
   default: info
   logs:
@@ -57,6 +80,16 @@ logger:
 """
 
 MOSQUITTO = "listener 1883\nallow_anonymous true\npersistence true\npersistence_location /mosquitto/data/\n"
+MOSQUITTO_ACL = (
+    "listener 1883\nallow_anonymous false\npassword_file /mosquitto/config/passwd\n"
+    "acl_file /mosquitto/config/acl\npersistence true\npersistence_location /mosquitto/data/\n"
+)
+# The ACL of docs/install.md: each device is a broker user named after its device ID.
+ACL_FILE = (
+    (REPO / "docs" / "mosquitto-acl.example").read_text()
+    if (REPO / "docs" / "mosquitto-acl.example").exists()
+    else ""
+)
 
 
 def podman(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -69,17 +102,43 @@ def up(language: str) -> None:
     (RIG / "config").mkdir(parents=True, exist_ok=True)
     (RIG / "mosquitto/config").mkdir(parents=True, exist_ok=True)
     (RIG / "mosquitto/data").mkdir(parents=True, exist_ok=True)
-    (RIG / "mosquitto/config/mosquitto.conf").write_text(MOSQUITTO)
+    (RIG / "mosquitto/config/mosquitto.conf").write_text(
+        MOSQUITTO_ACL if ACL else MOSQUITTO
+    )
+    if ACL:
+        (RIG / "mosquitto/config/acl").write_text(ACL_FILE)
+        commands = [
+            f"mosquitto_passwd -b {'-c ' if i == 0 else ''}/mosquitto/config/passwd {user} {password}"
+            for i, (user, password) in enumerate(USERS.items())
+        ]
+        podman(
+            "run",
+            "--rm",
+            "--security-opt",
+            "label=disable",
+            "-v",
+            f"{RIG}/mosquitto/config:/mosquitto/config",
+            MQTT_IMAGE,
+            "sh",
+            "-c",
+            " && ".join(
+                [
+                    *commands,
+                    "chown 1883:1883 /mosquitto/config/passwd /mosquitto/config/acl",
+                    "chmod 0600 /mosquitto/config/passwd",
+                ]
+            ),
+        )
     conf = RIG / "config/configuration.yaml"
     if not conf.exists():
         conf.write_text(CONFIGURATION.format(language=language))
-    podman("rm", "-f", "rh-ha", "rh-mqtt", check=False)  # `up` can be run again
+    podman("rm", "-f", HA_NAME, MQTT_NAME, check=False)  # `up` can be run again
     podman("network", "create", NET, check=False)
     podman(
         "run",
         "-d",
         "--name",
-        "rh-mqtt",
+        MQTT_NAME,
         "--network",
         NET,
         "-p",
@@ -99,7 +158,7 @@ def up(language: str) -> None:
         "run",
         "-d",
         "--name",
-        "rh-ha",
+        HA_NAME,
         "--network",
         NET,
         "-p",
@@ -121,11 +180,11 @@ def up(language: str) -> None:
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             print(".", end="", flush=True)
             time.sleep(3)
-    sys.exit("Home Assistant did not start; see: podman logs rh-ha")
+    sys.exit(f"Home Assistant did not start; see: podman logs {HA_NAME}")
 
 
 def down() -> None:
-    podman("rm", "-f", "rh-ha", "rh-mqtt", check=False)
+    podman("rm", "-f", HA_NAME, MQTT_NAME, check=False)
     print("removed")
 
 
@@ -223,9 +282,14 @@ def onboard() -> None:
             "POST",
             f"/api/config/config_entries/flow/{flow['flow_id']}",
             {
-                "broker": "rh-mqtt",
+                "broker": MQTT_NAME,
                 "port": 1883,
                 "protocol": "5",
+                **(
+                    {"username": "homeassistant", "password": USERS["homeassistant"]}
+                    if ACL
+                    else {}
+                ),
                 "other_settings": {
                     "set_ca_cert": "off",
                     "set_client_cert": False,
@@ -387,14 +451,17 @@ def screenshot(
     print(result.stdout, result.stderr[-1500:] if result.returncode else "")
 
 
-def confirm(slug: str) -> None:
+def confirm(slug: str, device_id: str | None = None) -> None:
     """Confirm every pending Roundhouse discovery with this dashboard slug."""
     token = access()
     flows = asyncio.run(ws_call([{"type": "config_entries/flow/progress"}]))[0][
         "result"
     ]
     for flow in flows:  # type: ignore[attr-defined,union-attr]
-        if flow["handler"] == "roundhouse":
+        if flow["handler"] == "roundhouse" and device_id in (
+            None,
+            flow["context"]["unique_id"],
+        ):
             reply = http(
                 "POST",
                 f"/api/config/config_entries/flow/{flow['flow_id']}",
@@ -410,7 +477,7 @@ def confirm(slug: str) -> None:
 
 
 def logs() -> None:
-    out = podman("logs", "rh-ha").stdout + podman("logs", "rh-ha").stderr
+    out = podman("logs", HA_NAME).stdout + podman("logs", HA_NAME).stderr
     for line in out.splitlines():
         if "roundhouse" in line.lower() or "ERROR" in line or "WARNING" in line:
             print(line)
