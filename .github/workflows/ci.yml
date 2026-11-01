@@ -48,8 +48,13 @@ jobs:
       # its own plugin version together with HA.
       - if: matrix.channel == 'previous'
         run: uv pip install "homeassistant${{ matrix.ha }}" "pytest-homeassistant-custom-component==0.13.367"
-      # No plugin release supports the beta yet; override HA only, so the
-      # job fails on the known import error and not on resolver backtracking.
+      # No plugin release supports the beta yet, so the beta job runs a smoke
+      # test: every module imports and the contract vectors pass. The respx
+      # plugin is off because it imports httpx before Home Assistant can.
       - if: matrix.channel == 'beta'
-        run: uv pip install --pre "homeassistant${{ matrix.ha }}"
-      - run: mise run test
+        run: |
+          uv pip install --pre "homeassistant${{ matrix.ha }}"
+          .venv/bin/python -c "import custom_components.roundhouse.config_flow, custom_components.roundhouse.device"
+          .venv/bin/pytest -q -p no:homeassistant -p no:respx --noconftest tests/test_contract_vectors.py
+      - if: matrix.channel != 'beta'
+        run: mise run test

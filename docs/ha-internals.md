@@ -113,38 +113,7 @@ version. One version cannot test two releases:
 - Stable: version 0.13.375 with 2026.10.4.
 - Previous release: the resolver picks 0.13.367 with 2026.9.4.
 - Beta 2026.11.0b1: version 0.13.375 fails at import (`httpx` alias, then
-  `_clear_logger_overwrites`). No release supports the beta yet, so the beta
-  job may fail.
-
-## MQTT
-
-Checked on 2026.10.4 and 2026.9.4. The beta could not run the integration
-tests (see Test tooling).
-
-- `mqtt.async_publish(hass, topic, payload, qos, retain, encoding=None)` sends
-  bytes unchanged. `mqtt.async_subscribe(..., encoding=None)` delivers bytes.
-  An empty payload with `retain=True` clears a retained topic.
-- A subscription on a wildcard receives the retained messages of the broker
-  with `retain=True`. A live message forwarded by a broker has `retain=False`.
-  Home Assistant drops a second `retain=True` message on the same topic for a
-  subscription, so a test must send live updates with `retain=False`.
-- `mqtt.async_subscribe_connection_status(hass, callback)` calls
-  `callback(connected: bool)`. Use it to republish after a reconnect.
-- The birth message is `birth_message` in the MQTT entry's options (or data):
-  an absent key is the default (enabled on `homeassistant/status`), `{}` is
-  disabled, and a dict needs `topic`, `payload`, `qos`, and `retain`.
-- The mqtt discovery flow runs for every matching message, also for a known
-  device. Home Assistant then adds a discovery key to the existing entry, which
-  calls the entry's update listeners. A listener that reloads must compare the
-  data and options first, or the entry reloads on every announce.
-
-## Flows and schemas
-
-- Home Assistant 2026.10 moved from `voluptuous` to `probatio`; 2026.9 still
-  uses `voluptuous`. A flow schema must use the library Home Assistant uses.
-  `custom_components/roundhouse/compat.py` picks it from `data_entry_flow`.
-- `LOVELACE_DATA` is exported from `homeassistant.components.lovelace.const` on
-  every checked release. The package-level import is not in `__all__` before
-  the beta.
-- `async_call_later` runs a plain function in an executor thread. Mark a
-  callback that touches the event loop with `@callback`.
+  `_clear_logger_overwrites`), so the integration tests cannot run. The
+  `respx` pytest plugin also imports `httpx` before Home Assistant aliases it;
+  run the plain tests with `-p no:homeassistant -p no:respx --noconftest`. No
+  plugin release supports the beta yet.
