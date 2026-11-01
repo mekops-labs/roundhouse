@@ -141,7 +141,7 @@ async def cmd(hass: HomeAssistant, mqtt_mock: Any, body: dict[str, Any]) -> str 
     return got[-1] if got else None
 
 
-# --- R4: raise an alert from an automation -----------------------------------
+# --- raise an alert from an automation -----------------------------------
 
 
 async def test_an_alert_is_published_retained_without_its_service_calls(
@@ -177,7 +177,7 @@ async def test_a_camera_snapshot_is_attached_within_the_budget(
     started = time.perf_counter()
     with Camera().patched():
         (alert_id,) = (await send(hass, camera_entity="camera.gate")).values()
-    assert time.perf_counter() - started < 3  # NFR-2
+    assert time.perf_counter() - started < 3  # the budget for a snapshot alert
     payload = last_alert(mqtt_mock, alert_id)
     box, thumb_box = tender_profile["image_box"], tender_profile["thumb_box"]
     assert (payload["image"]["width"], payload["image"]["height"]) == (480, 270)
@@ -354,7 +354,7 @@ async def test_an_unknown_action_id_is_denied(
     assert calls == []
 
 
-# --- R5: acknowledge everywhere ----------------------------------------------
+# --- acknowledge everywhere ----------------------------------------------
 
 
 async def test_a_device_acknowledgment_marks_the_alert_read_and_fires_the_event(
@@ -594,7 +594,7 @@ async def test_alerts_age_out_by_time_and_an_expired_action_is_denied(
     await hass.async_block_till_done()
     assert device.alerts.get(alert_id) is None
     assert f"alert/{alert_id}" not in device.publisher.owned
-    # FR-77: an action on an expired alert is denied, and the service is not called.
+    # An action on an expired alert is denied, and the service is not called.
     assert (
         await cmd(
             hass, mqtt_mock, {"req": "late", "alert": alert_id, "action_id": "lights"}

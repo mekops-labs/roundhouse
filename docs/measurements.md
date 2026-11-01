@@ -22,13 +22,13 @@ needs to produce an image.
 | Alert with a snapshot to its publish | ≤ 3 s | 20 | 21 ms | 48 ms | 48 ms | within |
 | Home Assistant restart to the full retained set | ≤ 30 s | 3 | 6.9 s | 7.0 s | 7.0 s | within |
 
-The reference host in the specification is a small machine such as a Raspberry
+A reference host is a small machine such as a Raspberry
 Pi; these numbers come from a desktop and show the cost of Roundhouse itself, not
 of a small host. Run `mise run measure` on the target host to record its numbers.
 
 ## Soak
 
-`tools/soak/soak.py` (QT-4) keeps two device doubles online on a broker with the
+`tools/soak/soak.py` keeps two device doubles online on a broker with the
 documented ACL and drives a workload: changes in Home Assistant and commands from
 the devices, dashboard edits (some overflowing), alerts with a snapshot and an
 action, and restarts of Home Assistant and of the broker. It fails on a lost
@@ -58,5 +58,5 @@ after a reconnect. An update made while the broker restarts waits for Home
 Assistant's own MQTT reconnect and then arrives; the slowest in the run took
 9 seconds. The soak counts that as delivered, because the update is never lost.
 
-The specification asks for 24 hours. Run it with `mise run soak -- --minutes
+The release criterion is a 24-hour run. Run it with `mise run soak -- --minutes
 1440`; it writes `report.json` to the soak directory.

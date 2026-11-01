@@ -201,7 +201,7 @@ def _temp_only(
 _TOGGLE: dict[str, Builder] = {"toggle": _no_data}
 _TURN: dict[str, Builder] = {"turn_on": _no_data, "turn_off": _no_data}
 
-# Entity domain -> action -> builder (FR-61).
+# Entity domain -> action -> builder.
 TABLE: dict[str, dict[str, Builder]] = {
     "light": {"toggle": _no_data, "turn_on": _light_turn_on, "turn_off": _no_data},
     "switch": _TOGGLE,

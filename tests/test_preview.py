@@ -103,7 +103,9 @@ async def test_a_save_pushes_a_new_snapshot_within_the_budget(
     snap = await event(client)
     assert len(snap["views"][0]["tiles"]) == 3
     # The 2 s wait of the digest is fake time here; the rest takes no time at all.
-    assert time.perf_counter() - started < 1  # NFR-2: the whole path is within 3 s
+    assert (
+        time.perf_counter() - started < 1
+    )  # the whole path is far inside its 3 s budget
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 

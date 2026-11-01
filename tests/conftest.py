@@ -97,7 +97,7 @@ def _outside_the_loop(name: str, func: Any, cold: Any = None) -> Any:
         except RuntimeError:
             return func(*args, **kwargs)
         if cold is None or cold():
-            raise AssertionError(f"{name} ran in the event loop (NFR-1)")
+            raise AssertionError(f"{name} ran in the event loop")
         return func(*args, **kwargs)
 
     guarded.__name__ = name

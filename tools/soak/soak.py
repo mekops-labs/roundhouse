@@ -1,4 +1,4 @@
-"""The soak (QT-4): a scripted workload against Roundhouse, with restarts.
+"""The soak: a scripted workload against Roundhouse, with restarts.
 
     soak.py --minutes 20          a short run
     soak.py --minutes 1440        the 24-hour soak

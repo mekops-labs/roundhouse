@@ -1,4 +1,4 @@
-"""Measure the latency budgets (NFR-2) on this host and write docs/measurements.md.
+"""Measure the latency budgets on this host and write docs/measurements.md.
 
     measure.py            run every measurement
     measure.py --quick    fewer samples, for a check of the script itself
@@ -226,7 +226,7 @@ needs to produce an image.
 
 {text}
 
-The reference host in the specification is a small machine such as a Raspberry
+A reference host is a small machine such as a Raspberry
 Pi; these numbers come from a desktop and show the cost of Roundhouse itself, not
 of a small host. Run `mise run measure` on the target host to record its numbers.
 """
