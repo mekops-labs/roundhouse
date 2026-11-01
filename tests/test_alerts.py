@@ -68,9 +68,11 @@ class Camera:
         self, content: bytes = b"", delay: float = 0, fail: bool = False
     ) -> None:
         self.content, self.delay, self.fail = content or png(), delay, fail
+        self.calls = 0
 
     def module(self) -> types.ModuleType:
         async def get_image(_hass: Any, entity_id: str) -> Any:
+            self.calls += 1
             if self.delay:
                 await asyncio.sleep(self.delay)
             if self.fail:
@@ -496,6 +498,65 @@ async def test_two_devices_each_get_the_alert(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
+async def test_two_devices_share_one_snapshot_fetch(
+    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+) -> None:
+    from .conftest import make_entry
+
+    await setup(hass, tender_profile, config(("home", [])))
+    second = make_entry(tender_profile, "tender02", "tender-panel-2")
+    second.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(second.entry_id)
+    await hass.async_block_till_done()
+    camera = Camera()
+    with camera.patched():
+        ids = await send(
+            hass,
+            device_id=[registry_id(hass), registry_id(hass, "tender02")],
+            camera_entity="camera.gate",
+        )
+    assert camera.calls == 1
+    assert last_alert(mqtt_mock, ids["tender01"])["image"] is not None
+    assert topic_publishes(mqtt_mock, f"alert/{ids['tender01']}/image")
+    late = [
+        c.args[1]
+        for c in mqtt_mock.async_publish.call_args_list
+        if c.args[0] == f"roundhouse/tender02/alert/{ids['tender02']}/image"
+    ]
+    assert late
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_slow_snapshots_on_two_devices_wait_once(
+    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+) -> None:
+    from .conftest import make_entry
+
+    await setup(hass, tender_profile, config(("home", [])))
+    second = make_entry(tender_profile, "tender02", "tender-panel-2")
+    second.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(second.entry_id)
+    await hass.async_block_till_done()
+    with patch.object(alertmanager, "IMAGE_WAIT", 0.2), Camera(delay=1).patched():
+        started = time.perf_counter()
+        await hass.services.async_call(
+            DOMAIN,
+            "send_alert",
+            {
+                "device_id": [registry_id(hass), registry_id(hass, "tender02")],
+                "title": "t",
+                "message": "m",
+                "camera_entity": "camera.gate",
+            },
+            blocking=True,
+            return_response=True,
+        )
+        # The devices wait side by side, not one after the other.
+        assert time.perf_counter() - started < 0.35
+        await hass.async_block_till_done()
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
 # --- notify -------------------------------------------------------------------
 
 
@@ -712,6 +773,96 @@ async def test_meta_only_mode_clears_alerts_from_the_broker_and_recovery_restore
     announce(hass, "tender01", tender_profile)
     await hass.async_block_till_done()
     assert f"alert/{alert_id}" in device.publisher.owned
+
+
+async def test_a_meta_only_device_gets_no_alert_images(
+    hass: HomeAssistant, mqtt_mock: Any, device: Any
+) -> None:
+    announce(hass, "tender01", vector("announce", "major-mismatch")["payload"])
+    await hass.async_block_till_done()
+    mqtt_mock.async_publish.reset_mock()
+    with Camera().patched():
+        (alert_id,) = (await send(hass, camera_entity="camera.gate")).values()
+    assert not [
+        c for c in mqtt_mock.async_publish.call_args_list if "/alert/" in c.args[0]
+    ]
+    assert device.publisher.owned == {"meta"}
+    assert device.alerts.get(alert_id)["image"] is not None  # kept for recovery
+
+
+@pytest.mark.parametrize(
+    ("change", "dropped", "kept"),
+    [
+        ({"limits": {"max_payload": 20000}}, "image", "thumb"),
+        ({"display": {"format": "rgb565"}}, "image", None),
+    ],
+)
+async def test_stored_images_the_new_profile_cannot_take_are_dropped(
+    hass: HomeAssistant,
+    mqtt_mock: Any,
+    lovelace: None,
+    tender_profile: dict[str, Any],
+    change: dict[str, Any],
+    dropped: str,
+    kept: str | None,
+) -> None:
+    from homeassistant.config_entries import ConfigEntryState
+
+    entry = await setup(hass, tender_profile, config(("home", [])))
+    with Camera().patched():
+        (alert_id,) = (await send(hass, camera_entity="camera.gate")).values()
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+    profile = json.loads(json.dumps(tender_profile))
+    for section, values in change.items():
+        profile[section] = {**profile[section], **values}
+
+    mqtt_mock.async_publish.reset_mock()
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, "profile": profile}
+    )
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    alert = hass.data[DOMAIN][entry.entry_id].alerts.get(alert_id)
+    assert alert[dropped] is None
+    assert last_alert(mqtt_mock, alert_id)[dropped] is None
+    assert not topic_publishes(mqtt_mock, f"alert/{alert_id}/{dropped}")
+    if kept:
+        assert alert[kept] is not None
+        assert topic_publishes(mqtt_mock, f"alert/{alert_id}/{kept}")
+    # The startup cleanup clears the old bitmap the broker still holds.
+    async_fire_mqtt_message(
+        hass, PREFIX + f"alert/{alert_id}/{dropped}", b"old", retain=True
+    )
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+    assert (PREFIX + f"alert/{alert_id}/{dropped}", b"", 1, True) in [
+        tuple(c.args[:4]) for c in mqtt_mock.async_publish.call_args_list
+    ]
+
+
+async def test_a_snapshot_done_just_after_the_wait_is_not_overwritten(
+    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+) -> None:
+    from .conftest import make_entry
+
+    entry = make_entry(tender_profile)
+    entry.add_to_hass(hass)
+    # One alert held: each new one ages the old one out, so the records are copies.
+    hass.config_entries.async_update_entry(entry, options={"alert_max_count": 1})
+    await setup(hass, tender_profile, config(("home", [])), entry=entry)
+    await send(hass)
+    real_wait = asyncio.wait
+
+    # Stands in for asyncio.wait, so it keeps its signature.
+    async def late(fs: Any, timeout: float | None = None, **kw: Any) -> Any:  # noqa: ASYNC109
+        if timeout != alertmanager.IMAGE_WAIT:
+            return await real_wait(fs, timeout=timeout, **kw)
+        await real_wait(fs)  # the image lands, then the wait reports a timeout
+        return set(), set(fs)
+
+    with Camera().patched(), patch.object(alertmanager.asyncio, "wait", late):
+        (alert_id,) = (await send(hass, camera_entity="camera.gate")).values()
+    assert last_alert(mqtt_mock, alert_id)["image"] is not None
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
 async def test_a_reconnect_republishes_alerts(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from homeassistant.core import (
@@ -14,7 +15,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
-from . import alertlogic
+from . import alertlogic, rendering
 from .compat import vol
 from .const import (
     DEFAULT_SEVERITY,
@@ -83,18 +84,37 @@ async def _send_alert(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse
         alertlogic.parse_actions(data.get("actions"))
     except alertlogic.AlertError as err:
         raise ServiceValidationError(str(err)) from err
-    ids: dict[str, str] = {}
-    for device in devices:
-        ids[device.device_id] = await device.alerts.async_add(
-            title=data["title"],
-            message=data["message"],
-            severity=data["severity"],
-            actions=data.get("actions"),
-            tag=data.get("tag"),
-            camera_entity=data.get("camera_entity"),
-            image_url=data.get("image_url"),
+    snapshot: asyncio.Task[bytes] | None = None
+    if data.get("camera_entity") or data.get("image_url"):
+        # One fetch for every device; each one encodes it for its own profile.
+        snapshot = hass.async_create_task(
+            rendering.async_fetch_image(
+                hass,
+                camera_entity=data.get("camera_entity"),
+                image_url=data.get("image_url"),
+            )
         )
-    return {"alert_ids": dict(ids)}
+        snapshot.add_done_callback(_consume)
+    added = await asyncio.gather(
+        *(
+            device.alerts.async_add(
+                title=data["title"],
+                message=data["message"],
+                severity=data["severity"],
+                actions=data.get("actions"),
+                tag=data.get("tag"),
+                snapshot=snapshot,
+            )
+            for device in devices
+        )
+    )
+    return {"alert_ids": {d.device_id: i for d, i in zip(devices, added, strict=True)}}
+
+
+def _consume(task: asyncio.Task[bytes]) -> None:
+    """Mark a failed fetch as seen; every device reports the failure itself."""
+    if not task.cancelled():
+        task.exception()
 
 
 async def _acknowledge(hass: HomeAssistant, call: ServiceCall) -> None:

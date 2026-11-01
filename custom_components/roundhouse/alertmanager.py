@@ -119,9 +119,13 @@ class AlertManager:
         """Publish every held alert with its images (idempotent)."""
         if self._device.error is not None:
             return
-        for alert in self._alerts:
-            await self._publish_images(alert)
-            await self._publish_alert(alert)
+        async with self._lock:
+            dropped = False
+            for alert in self._alerts:
+                dropped |= await self._publish_images(alert)
+                await self._publish_alert(alert)
+            if dropped:
+                await self._save()
 
     async def _publish_alert(self, alert: dict[str, Any]) -> None:
         if self._device.error is not None:
@@ -133,15 +137,57 @@ class AlertManager:
         except PayloadTooLargeError as err:
             _LOGGER.error("Alert not published: %s", err)
 
-    async def _publish_images(self, alert: dict[str, Any]) -> None:
+    async def _publish_images(self, alert: dict[str, Any]) -> bool:
+        """Publish the stored bitmaps of an alert.
+
+        A bitmap the current profile cannot take is dropped from the alert.
+        Return True when the alert changed.
+        """
+        if self._device.error is not None:
+            return False
         if not (alert.get("image") or alert.get("thumb")):
-            return
+            return False
         stored = await self._image_store(alert["id"]).async_load() or {}
+        dropped = False
         for key in ("image", "thumb"):
-            if alert.get(key) and stored.get(key):
-                await self._device.publisher.async_publish(
-                    f"alert/{alert['id']}/{key}", base64.b64decode(stored[key])
+            size = alert.get(key)
+            if not size:
+                continue
+            data = base64.b64decode(stored.get(key) or "")
+            if not self._fits(key, size, data, stored.get("format")):
+                _LOGGER.warning(
+                    "Alert %s %s dropped: it does not fit the device profile",
+                    alert["id"],
+                    key,
                 )
+                alert[key] = None
+                await self._device.publisher.async_clear(f"alert/{alert['id']}/{key}")
+                dropped = True
+                continue
+            await self._device.publisher.async_publish(
+                f"alert/{alert['id']}/{key}", data
+            )
+        return dropped
+
+    def _fits(
+        self, key: str, size: dict[str, int], data: bytes, fmt: str | None
+    ) -> bool:
+        """Check a stored bitmap against the format, box, and payload limit."""
+        profile = self._device.profile or {}
+        try:
+            box = profile[f"{key}_box"]
+            if fmt is None or fmt != profile["display"]["format"]:
+                return False
+            width, height = size["width"], size["height"]
+            expected = codec.bitmap_length(fmt, width, height)
+        except (KeyError, TypeError, codec.ContractError):
+            return False
+        return (
+            width <= box["width"]
+            and height <= box["height"]
+            and len(data) == expected
+            and len(data) <= self._device.publisher.max_payload
+        )
 
     async def _clear(self, alert: dict[str, Any]) -> None:
         for sub in ("", "/image", "/thumb"):
@@ -168,10 +214,12 @@ class AlertManager:
         severity: str = "event",
         actions: Any = None,
         tag: str | None = None,
-        camera_entity: str | None = None,
-        image_url: str | None = None,
+        snapshot: asyncio.Future[bytes] | None = None,
     ) -> str:
-        """Raise an alert; return its ID. Raises `AlertError` for bad actions."""
+        """Raise an alert; return its ID. Raises `AlertError` for bad actions.
+
+        `snapshot` is a fetch of the image; several devices may share one.
+        """
         parsed = alertlogic.parse_actions(actions)
         alert = alertlogic.new_alert(
             alert_id=alertlogic.new_id(),
@@ -189,26 +237,25 @@ class AlertManager:
             self._alerts.append(alert)
             await self._expire()
             await self._save()
-        if camera_entity or image_url:
-            job = self._hass.async_create_task(
-                self._image_job(alert["id"], camera_entity, image_url)
-            )
+        if snapshot is not None:
+            job = self._hass.async_create_task(self._image_job(alert["id"], snapshot))
             self._jobs.add(job)
             job.add_done_callback(self._jobs.discard)
             done, _ = await asyncio.wait({job}, timeout=IMAGE_WAIT)
             if done:
                 return str(alert["id"])
         async with self._lock:
-            if self.get(alert["id"]):
-                await self._publish_alert(alert)
+            # Aging replaces the held records with copies; publish the held one.
+            held = self.get(alert["id"])
+            if held is not None:
+                await self._publish_alert(held)
         return str(alert["id"])
 
-    async def _image_job(
-        self, alert_id: str, camera_entity: str | None, image_url: str | None
-    ) -> None:
+    async def _image_job(self, alert_id: str, snapshot: asyncio.Future[bytes]) -> None:
+        fmt = ""
         encoded: dict[str, tuple[bytes, int, int]] = {}
         try:
-            encoded = await self._render_images(camera_entity, image_url)
+            fmt, encoded = await self._render_images(snapshot)
         except rendering.ImageFetchError as err:
             _LOGGER.warning("Alert %s sent without an image: %s", alert_id, err)
         except Exception:
@@ -218,16 +265,15 @@ class AlertManager:
             if alert is None:
                 return
             if encoded:
-                await self._attach(alert, encoded)
+                await self._attach(alert, fmt, encoded)
             await self._publish_alert(alert)
 
     async def _render_images(
-        self, camera_entity: str | None, image_url: str | None
-    ) -> dict[str, tuple[bytes, int, int]]:
+        self, snapshot: asyncio.Future[bytes]
+    ) -> tuple[str, dict[str, tuple[bytes, int, int]]]:
         profile = self._device.profile or {}
-        raw = await rendering.async_fetch_image(
-            self._hass, camera_entity=camera_entity, image_url=image_url
-        )
+        # Shielded: stopping this device must not cancel a fetch others share.
+        raw = await asyncio.shield(snapshot)
         fmt = profile["display"]["format"]
         limit = self._device.publisher.max_payload
         out: dict[str, tuple[bytes, int, int]] = {}
@@ -244,18 +290,22 @@ class AlertManager:
                 )
             else:
                 out[key] = result
-        return out
+        return fmt, out
 
     async def _attach(
-        self, alert: dict[str, Any], encoded: dict[str, tuple[bytes, int, int]]
+        self,
+        alert: dict[str, Any],
+        fmt: str,
+        encoded: dict[str, tuple[bytes, int, int]],
     ) -> None:
-        stored: dict[str, str] = {}
+        stored: dict[str, str] = {"format": fmt}
         for key, (data, width, height) in encoded.items():
             alert[key] = {"width": width, "height": height}
             stored[key] = base64.b64encode(data).decode()
         await self._image_store(alert["id"]).async_save(stored)
         await self._save()
-        await self._publish_images(alert)
+        if await self._publish_images(alert):
+            await self._save()
 
     # --- acknowledging ------------------------------------------------------
 

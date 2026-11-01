@@ -439,6 +439,12 @@ def _stride(fmt: str, width: int) -> int:
     return 2 * width if fmt == "rgb565" else (width + 1) // 2
 
 
+def bitmap_length(fmt: str, width: int, height: int) -> int:
+    """Return the byte length of a bitmap; rows start on a byte boundary."""
+    _check_bitmap(fmt, width, height)
+    return _stride(fmt, width) * height
+
+
 def _check_bitmap(fmt: str, width: int, height: int) -> None:
     if fmt not in BITMAP_FORMATS:
         raise _fail("format", f"{fmt!r} is not a bitmap format")
