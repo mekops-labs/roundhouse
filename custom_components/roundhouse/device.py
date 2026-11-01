@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 
 from . import codec, issues, layout
+from .cmdhandler import CommandHandler
 from .const import CONF_DEVICE_ID, CONF_PROFILE, STALE_SETTLE_SECONDS
 from .publisher import PayloadTooLargeError, Publisher
 from .statesync import StateSync
@@ -35,6 +36,7 @@ class Device:
         self._unsubs: list[CALLBACK_TYPE] = []
         self.views = ViewSync(hass, self)
         self.states = StateSync(hass, self)
+        self.commands = CommandHandler(hass, self)
         self.card_icons: dict[str, str] = {}
         self._was_connected = True
 
@@ -45,6 +47,15 @@ class Device:
                 self._hass,
                 f"roundhouse/{self.device_id}/announce",
                 self._on_announce,
+                qos=1,
+                encoding=None,
+            )
+        )
+        self._unsubs.append(
+            await mqtt.async_subscribe(
+                self._hass,
+                f"roundhouse/{self.device_id}/cmd",
+                self._on_cmd,
                 qos=1,
                 encoding=None,
             )
@@ -73,7 +84,18 @@ class Device:
         self.views_payload = payload
         self.card_icons = card_icons or {}
 
-    def _tracked_entities(self) -> frozenset[str]:
+    def tiles_for(self, entity_id: str) -> list[dict[str, Any]]:
+        """Return the published tiles that show an entity."""
+        if self.error is not None or not self.views_payload:
+            return []
+        return [
+            t
+            for v in self.views_payload["views"]
+            for t in v["tiles"]
+            if t["entity_id"] == entity_id
+        ]
+
+    def tracked_entities(self) -> frozenset[str]:
         if self.error is not None or not self.views_payload:
             return frozenset()
         return frozenset(
@@ -104,7 +126,7 @@ class Device:
                 )
             except PayloadTooLargeError as err:
                 _LOGGER.error("View definition not published: %s", err)
-        await self.states.async_sync(self._tracked_entities(), self.card_icons)
+        await self.states.async_sync(self.tracked_entities(), self.card_icons)
         await self.publisher.async_publish("meta", self._meta())
         if self.error is not None:
             await self.publisher.async_clear_all_except(frozenset({"meta"}))
@@ -123,6 +145,10 @@ class Device:
     async def _async_resync(self) -> None:
         issues.check_mqtt_birth(self._hass)
         await self.publisher.async_resync()
+
+    async def _on_cmd(self, msg: mqtt.ReceiveMessage) -> None:
+        if isinstance(msg.payload, bytes):
+            await self.commands.async_handle(msg.payload)
 
     async def _on_announce(self, msg: mqtt.ReceiveMessage) -> None:
         payload = msg.payload

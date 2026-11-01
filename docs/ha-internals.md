@@ -164,3 +164,19 @@ Checked on 2026.10.4 and 2026.9.4.
   `entry.options["sensor"]["display_precision"]`.
 - The Material Design Icons font and name map are bundled; see
   `custom_components/roundhouse/mdi/README.md` for the pinned version.
+
+## Service calls
+
+Checked on 2026.10.4 and 2026.9.4.
+
+- `hass.services.async_call(domain, service, data, blocking=True)` waits for
+  the service. A missing service raises `ServiceNotFound` (a
+  `HomeAssistantError`) with the text `Action <domain>.<service> not found.`
+- Wrap the call in `asyncio.timeout(10)`: on expiry the call is cancelled and
+  the command result is `timeout`.
+- A schema error in a service call can surface as a library exception outside
+  `HomeAssistantError`; catch `Exception`, log it, and answer with its type
+  and message.
+- `async_mock_service(hass, domain, service)` registers a recording service in
+  tests; register a coroutine with `hass.services.async_register` to simulate a
+  slow or failing service.

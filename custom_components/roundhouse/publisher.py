@@ -68,6 +68,21 @@ class Publisher:
         self._published[subtopic] = payload
         return True
 
+    async def async_send_transient(self, subtopic: str, payload: bytes) -> None:
+        """Send a message that is neither retained nor tracked, at QoS 1."""
+        if len(payload) > self.max_payload:
+            raise PayloadTooLargeError(
+                f"{self._prefix}{subtopic}: {len(payload)} > {self.max_payload}"
+            )
+        await mqtt.async_publish(
+            self._hass,
+            self._prefix + subtopic,
+            payload,
+            qos=1,
+            retain=False,
+            encoding=None,
+        )
+
     async def async_clear(self, subtopic: str) -> None:
         """Clear one retained topic."""
         if self._published.pop(subtopic, None) is not None:

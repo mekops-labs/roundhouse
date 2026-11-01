@@ -89,6 +89,48 @@ Every mode and option is a `{value, label}` pair. Other values are plain.
 
 A key is absent when the entity has no such value.
 
+## Commands
+
+A command on `cmd` has a `req` (1 to 64 characters, unique per request) and
+one of three forms: an entity action (`entity_id`, `action`, optional `data`
+and `confirmed`), an alert action (`alert`, `action_id`, optional `confirmed`),
+or an acknowledgment (`ack`). Roundhouse answers each on `result` with the same
+`req`. A repeat of a `req` among the last 32 gets the stored result and no
+second action.
+
+Results: `ok`, `denied` (the entity is not on the device, the action does not
+exist for the domain, or no such alert), `invalid` (a value failed its check),
+`needs_confirmation`, `timeout` (the action took longer than 10 s), or the
+error text of the action (at most 200 characters). The checks run in this
+order: `denied`, `invalid`, `needs_confirmation`, the call.
+
+Entity actions by domain. `data` may only hold the keys listed; any other key
+makes the command `invalid`. `confirmed: true` is required for the actions
+marked with a dagger.
+
+| Domain | Action and `data` keys |
+| --- | --- |
+| `light` | `toggle`; `turn_on` (`brightness` 0-255, `color_temp_kelvin` within the entity's range); `turn_off` |
+| `switch`, `input_boolean` | `toggle` |
+| `fan` | `toggle`; `set_percentage` (`percentage` 0-100); `set_preset_mode` (`preset_mode`) |
+| `cover` | `open_cover`, `close_cover`, `stop_cover`; `set_cover_position` (`position` 0-100) |
+| `climate` | `set_temperature` (`temperature`, or `target_temp_low` and `target_temp_high`); `set_hvac_mode` (`hvac_mode`); `set_fan_mode` (`fan_mode`); `set_preset_mode` (`preset_mode`); `set_swing_mode` (`swing_mode`); `set_humidity` (`humidity`); `turn_on`; `turn_off` |
+| `water_heater` | `set_temperature` (`temperature`); `set_operation_mode` (`operation_mode`); `turn_on`; `turn_off` |
+| `humidifier` | `turn_on`; `turn_off`; `set_humidity` (`humidity`); `set_mode` (`mode`) |
+| `number`, `input_number` | `set_value` (`value`) |
+| `select`, `input_select` | `select_option` (`option`) |
+| `valve` | `open_valve`, `close_valve`, `stop_valve`; `set_valve_position` (`position` 0-100) |
+| `lock` | `lock`; `unlock`\u2020; `open`\u2020 |
+| `alarm_control_panel` | `alarm_arm_home`, `alarm_arm_away`; `alarm_disarm`\u2020 |
+| `scene`, `script` | `turn_on` |
+| `button`, `input_button` | `press` |
+
+A mode or option must be in the entity's own list and, when the tile carries a
+control of that type with `values`, in that list too. A number must lie within
+the entity's `min` and `max` (`min_temp` and `max_temp`, `min_humidity` and
+`max_humidity`). Every other domain has no actions. A command never carries a
+code or any credential.
+
 ## Control types
 
 The `controls` list of a tile names the controls of its detail page, in order.
