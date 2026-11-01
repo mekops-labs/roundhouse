@@ -13,6 +13,15 @@ Status: under development. No release yet.
 - Home Assistant stable or the release before it.
 - Home Assistant's `mqtt` integration, with the birth message enabled.
 
+## Preview panel
+
+An admin-only "Roundhouse" entry in the sidebar shows each view of a device
+drawn as the device will draw it: its screen size, header, tab strip, layout,
+and live tiles with the same icons, state text, and colors the device gets. Tiles
+that do not fit are hatched in red with their number and the capacity (`16 / 15`),
+below the screen. It updates after every dashboard save and on every state
+change. Fonts differ slightly from the device; the geometry and the capacity do not.
+
 ## Entities
 
 Each panel is a Home Assistant device with:
@@ -63,7 +72,7 @@ Dependencies and tasks run through [mise](https://mise.jdx.dev).
 ```sh
 mise install        # Python and uv
 mise run setup      # test dependencies into .venv
-mise run check      # ruff, mypy, pytest
+mise run check      # ruff, mypy, pytest, and the panel's JavaScript tests
 ```
 
 Home Assistant internals the integration relies on are recorded in

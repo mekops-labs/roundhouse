@@ -26,6 +26,7 @@ jobs:
       - uses: jdx/mise-action@v2
       - run: mise run setup
       - run: mise run lint
+      - run: mise run test-js
 
   test:
     runs-on: ubuntu-latest

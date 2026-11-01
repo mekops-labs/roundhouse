@@ -218,3 +218,32 @@ Checked on 2026.10.4, 2026.9.4, and the 2026.11 beta for imports.
   clock and the timers in a test, which is how the grace period is tested.
 - A retained message is delivered to a subscription once; deliver the second and
   later ones with `retain=False`, as a broker does for a live update.
+
+## Panel and websocket
+
+Checked on 2026.10.4 and 2026.9.4.
+
+- `panel_custom.async_register_panel(hass, webcomponent_name=..., frontend_url_path=...,
+  module_url=..., sidebar_title=..., sidebar_icon=..., require_admin=True)` adds
+  a sidebar panel that loads an ES module. The module defines the custom
+  element; Home Assistant sets its `hass`, `narrow`, `route`, and `panel`
+  properties. Register the files with
+  `hass.http.async_register_static_paths([StaticPathConfig(url, dir, cache_headers=False)])`
+  and add `?v=<hash>` to the module URL so a browser reloads a changed panel.
+- A panel may only be registered when the frontend and the HTTP server exist;
+  a headless instance and the tests have neither, so registration is skipped.
+  The panel appears in `hass.data["frontend_panels"]`.
+- `hass.connection.subscribeMessage(callback, {type: ...})` in the browser
+  matches `connection.subscriptions[msg["id"]] = unsubscribe` and
+  `connection.send_message(event_message(msg["id"], payload))` on the server.
+  Stacked decorators: `require_admin`, then `websocket_command`, then
+  `async_response`. A non-admin user gets `unauthorized`.
+- `websocket_api.websocket_command` and its siblings are not re-exported with an
+  explicit `__all__`; import them from `websocket_api.decorators`, `.const`,
+  `.messages`, and `.connection`.
+- A command registered in `async_setup` of an integration with no config entry
+  does not exist: the integration is not set up until an entry is.
+- A websocket test client blocks forever when nothing is sent; wrap
+  `receive_json()` in `asyncio.timeout`.
+- Node 24 (the current LTS) does not take a directory for `node --test`; pass a
+  glob such as `"tests/js/*.test.mjs"`.

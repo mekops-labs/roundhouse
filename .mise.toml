@@ -1,4 +1,5 @@
 [tools]
+node = "lts"
 python = "3.14"
 uv = "latest"
 
@@ -21,6 +22,10 @@ run = "ruff format ."
 description = "Run the test suite"
 run = "pytest -q"
 
+[tasks.test-js]
+description = "Run the preview panel tests"
+run = "node --test \"tests/js/*.test.mjs\""
+
 [tasks.check]
 description = "Lint, then test"
-depends = ["lint", "test"]
+depends = ["lint", "test", "test-js"]
