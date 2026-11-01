@@ -66,5 +66,55 @@
       "title": "View {view} does not fit on {device}",
       "description": "The view {view} has too many tiles for {device}: remove {excess}. The densest layout holds {capacity}. The device keeps the last version that fitted."
     }
+  },
+  "services": {
+    "send_alert": {
+      "name": "Send alert",
+      "description": "Show an alert on one or more panels, with an optional snapshot and action buttons.",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "The alert title."
+        },
+        "message": {
+          "name": "Message",
+          "description": "The alert text."
+        },
+        "severity": {
+          "name": "Severity",
+          "description": "critical, warning, or event."
+        },
+        "camera_entity": {
+          "name": "Camera",
+          "description": "A camera whose snapshot is attached."
+        },
+        "image_url": {
+          "name": "Image URL",
+          "description": "An http or https address of a snapshot."
+        },
+        "actions": {
+          "name": "Actions",
+          "description": "Buttons on the alert: a list of objects with id, label, action (domain.service), target, data, and confirm."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "A new alert with the same tag replaces the old one."
+        }
+      }
+    },
+    "acknowledge_alert": {
+      "name": "Acknowledge alert",
+      "description": "Mark alerts as read, by alert ID or by tag. Without a target, every panel is searched.",
+      "fields": {
+        "alert_id": {
+          "name": "Alert ID",
+          "description": "The ID of the alert."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "Acknowledge every alert with this tag."
+        }
+      }
+    }
   }
 }

@@ -54,7 +54,7 @@ jobs:
       - if: matrix.channel == 'beta'
         run: |
           uv pip install --pre "homeassistant${{ matrix.ha }}"
-          .venv/bin/python -c "import custom_components.roundhouse.config_flow, custom_components.roundhouse.device"
+          .venv/bin/python -c "import custom_components.roundhouse.config_flow, custom_components.roundhouse.device, custom_components.roundhouse.services, custom_components.roundhouse.notify"
           .venv/bin/pytest -q -p no:homeassistant -p no:respx --noconftest tests/test_contract_vectors.py
       - if: matrix.channel != 'beta'
         run: mise run test

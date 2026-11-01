@@ -148,9 +148,16 @@ class CommandHandler:
     async def _execute(self, cmd: dict[str, Any]) -> str:
         if "entity_id" in cmd:
             return await self._execute_entity(cmd)
-        # Alert actions and acknowledgments have no alert to act on yet.
-        self._deny_log("alert command without an active alert")
-        return "denied"
+        alerts = self._device.alerts
+        if "alert" in cmd:
+            result = await alerts.async_run_action(
+                cmd["alert"], cmd["action_id"], cmd["confirmed"]
+            )
+        else:
+            result = await alerts.async_ack_from_device(cmd["ack"])
+        if result == "denied":
+            self._deny_log("alert command for an unknown alert or action")
+        return result
 
     async def _execute_entity(self, cmd: dict[str, Any]) -> str:
         entity_id: str = cmd["entity_id"]

@@ -1,0 +1,51 @@
+send_alert:
+  target:
+    device:
+      integration: roundhouse
+  fields:
+    title:
+      required: true
+      example: Motion at the gate
+      selector:
+        text:
+    message:
+      required: true
+      example: The gate camera saw a person.
+      selector:
+        text:
+          multiline: true
+    severity:
+      default: event
+      selector:
+        select:
+          options:
+            - critical
+            - warning
+            - event
+    camera_entity:
+      selector:
+        entity:
+          domain: camera
+    image_url:
+      example: http://camera.local/snapshot.jpg
+      selector:
+        text:
+    actions:
+      example: '[{"id": "open", "label": "Open gate", "action": "cover.open_cover", "target": {"entity_id": "cover.gate"}}]'
+      selector:
+        object:
+    tag:
+      example: gate
+      selector:
+        text:
+acknowledge_alert:
+  target:
+    device:
+      integration: roundhouse
+  fields:
+    alert_id:
+      selector:
+        text:
+    tag:
+      selector:
+        text:

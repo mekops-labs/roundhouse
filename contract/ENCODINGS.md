@@ -131,6 +131,24 @@ the entity's `min` and `max` (`min_temp` and `max_temp`, `min_humidity` and
 `max_humidity`). Every other domain has no actions. A command never carries a
 code or any credential.
 
+## Alerts
+
+`alert/<id>` carries `title`, `message`, `severity`, `time` (Unix seconds),
+`read`, `actions`, and `image` and `thumb`. An alert ID is 1 to 32 lowercase
+letters and digits. `read` is false until the alert is acknowledged, from the
+device or from Home Assistant; Roundhouse then publishes it again with `read`
+true. `actions` lists `{id, label, confirm}` only. The device sends an action
+as `{req, alert, action_id, confirmed}` and never names a service. A flagged
+action (`confirm` true) needs `confirmed: true`, else the result is
+`needs_confirmation`.
+
+`image` and `thumb` are `{width, height}` or null. When set, the bitmap is on
+`alert/<id>/image` or `alert/<id>/thumb`, in the display format, within the
+announced `image_box` or `thumb_box` and the announced `max_payload`. Roundhouse
+publishes the bitmaps before the alert that names them, and publishes the alert
+again with the images if the snapshot arrives late. An unknown or expired alert
+gets the result `denied`, for an action and for an acknowledgment alike.
+
 ## Control types
 
 The `controls` list of a tile names the controls of its detail page, in order.

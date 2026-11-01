@@ -180,3 +180,23 @@ Checked on 2026.10.4 and 2026.9.4.
 - `async_mock_service(hass, domain, service)` registers a recording service in
   tests; register a coroutine with `hass.services.async_register` to simulate a
   slow or failing service.
+
+## Services, devices, and notify
+
+Checked on 2026.10.4 and 2026.9.4.
+
+- `device_registry.async_get_device(identifiers=...)` is deprecated on 2026.10
+  and raises in tests; use `async_get_device_by_identifier(identifier,
+  config_entry_id)`. The previous release only has the old name, so
+  `deviceinfo.find_device` picks the one that exists.
+- A service whose `services.yaml` entry has a `target` of `device` receives
+  `call.data["device_id"]`: a list of device registry IDs when targeted.
+- `hass.services.async_register(..., supports_response=SupportsResponse.OPTIONAL)`
+  lets an automation read a result with `response_variable`.
+- `NotifyEntityFeature` is in `notify.const` on 2026.10 and in
+  `notify.__init__` on 2026.9.
+- An integration that registers services in `async_setup` needs a
+  `CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)`.
+- `asyncio.wait({task}, timeout=...)` leaves the task running when it times
+  out; a task created with `hass.async_create_task` is awaited by
+  `async_block_till_done`, which hides the timeout in a test that calls it.

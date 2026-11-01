@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 
 from . import codec, issues, layout
+from .alertmanager import AlertManager
 from .cmdhandler import CommandHandler
 from .const import CONF_DEVICE_ID, CONF_PROFILE, STALE_SETTLE_SECONDS
 from .publisher import PayloadTooLargeError, Publisher
@@ -37,6 +38,7 @@ class Device:
         self.views = ViewSync(hass, self)
         self.states = StateSync(hass, self)
         self.commands = CommandHandler(hass, self)
+        self.alerts = AlertManager(hass, self)
         self.card_icons: dict[str, str] = {}
         self._was_connected = True
 
@@ -65,6 +67,7 @@ class Device:
         )
         issues.check_mqtt_birth(self._hass)
         await self.views.async_start()
+        await self.alerts.async_start()
         self.entry.async_create_background_task(
             self._hass, self._async_clean_stale(), f"roundhouse stale {self.device_id}"
         )
@@ -74,6 +77,7 @@ class Device:
         """Unsubscribe."""
         self.views.async_stop()
         self.states.async_stop()
+        self.alerts.async_stop()
         while self._unsubs:
             self._unsubs.pop()()
 
@@ -127,6 +131,8 @@ class Device:
             except PayloadTooLargeError as err:
                 _LOGGER.error("View definition not published: %s", err)
         await self.states.async_sync(self.tracked_entities(), self.card_icons)
+        if self.error is None:
+            await self.alerts.async_publish_all()
         await self.publisher.async_publish("meta", self._meta())
         if self.error is not None:
             await self.publisher.async_clear_all_except(frozenset({"meta"}))
