@@ -44,6 +44,16 @@ control `type`, `power_mode`, and the strings of `result`.
 Results defined in 1.0: `ok`, `denied`, `invalid`, `needs_confirmation`,
 `timeout`. Any other string is an error message from the service call.
 
+## Tile fields
+
+`domain` is the domain of the entity's detail page. Input helpers share the
+page of their base domain: `input_number` is `number`, `input_select` is
+`select`, `input_boolean` is `switch`, and `input_button` is `button`.
+`kind` is what a tap does: `toggle` for `light`, `switch`, `input_boolean`, and
+`fan`; `activate` for `scene`, `script`, `button`, and `input_button`;
+`readonly` for every other domain. `controls` is absent when the tile restricts
+nothing: the detail page then shows every control the entity supports.
+
 ## Control types
 
 The `controls` list of a tile names the controls of its detail page, in order.

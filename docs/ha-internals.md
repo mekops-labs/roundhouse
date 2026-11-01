@@ -53,6 +53,8 @@ config = await dash.async_load(False)  # raises ConfigNotFound
 
 - Saving a dashboard config fires `lovelace_updated` with `{"url_path": ...}`.
   The default dashboard has `url_path` `None`.
+- `async_load` raises `ConfigNotFound` (from `lovelace.const`, same on all
+  checked releases) for a dashboard that was created and never saved.
 - Deleting a dashboard fires it too. After the event, check that the
   dashboard still exists before loading it.
 - The constant `EVENT_LOVELACE_UPDATED` moved from
@@ -86,11 +88,24 @@ Feature `type` strings present in the frontend of stable (20260930.5) and beta
 | Light brightness | `light-brightness` |
 | Light color temperature | `light-color-temp` |
 
-Only the `type` strings are verified. Of the keys that restrict a feature's
-modes, the frontend confirms `hvac_modes` for `climate-hvac-modes`. The others
-(`preset_modes`, `fan_modes`, `swing_modes`, `operation_modes`, `modes`,
-`options`) are unverified; confirm each against a dashboard saved by the editor
-before relying on it.
+The frontend reads these keys from a feature's config to restrict its modes:
+`hvac_modes`, `preset_modes`, `fan_modes`, `swing_modes`, `operation_modes`,
+`modes`, and `options`. Roundhouse maps them as follows; the editor writes
+only `hvac_modes` and `style` by default, so a mode list appears only when the
+user restricts it:
+
+| Feature | Key |
+| --- | --- |
+| `climate-hvac-modes` | `hvac_modes` |
+| `climate-preset-modes`, `fan-preset-modes` | `preset_modes` |
+| `climate-fan-modes` | `fan_modes` |
+| `climate-swing-modes` | `swing_modes` |
+| `water-heater-operation-modes` | `operation_modes` |
+| `humidifier-modes` | `modes` |
+| `select-options` | `options` |
+
+The key names are present in the frontend, but the pairing of key and feature
+type comes from the documented card options, not from the compiled frontend.
 
 ## Translation and icon helpers
 
@@ -117,3 +132,11 @@ version. One version cannot test two releases:
   `respx` pytest plugin also imports `httpx` before Home Assistant aliases it;
   run the plain tests with `-p no:homeassistant -p no:respx --noconftest`. No
   plugin release supports the beta yet.
+
+## Test helpers
+
+- `async_fire_time_changed(hass, t)` adds up to 0.5 s of slack to `t`, so a
+  timer due in 2 s fires for an advance of 1.5 s. Advance by less than the
+  wait minus 0.5 s to assert that nothing fired yet.
+- A config entry that depends on `lovelace` sets Lovelace up for real in tests;
+  a test that wants a missing dashboard needs no fixture for it.

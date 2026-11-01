@@ -10,9 +10,10 @@ from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 
-from . import codec, issues
+from . import codec, issues, layout
 from .const import CONF_DEVICE_ID, CONF_PROFILE, STALE_SETTLE_SECONDS
-from .publisher import Publisher
+from .publisher import PayloadTooLargeError, Publisher
+from .viewsync import ViewSync
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,13 +24,15 @@ class Device:
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the device runtime."""
         self._hass = hass
-        self._entry = entry
+        self.entry = entry
         self.device_id: str = entry.data[CONF_DEVICE_ID]
         self.profile: dict[str, Any] | None = entry.data.get(CONF_PROFILE)
         self.error: str | None = None
+        self.views_payload: dict[str, Any] | None = None
         max_payload = (self.profile or {}).get("limits", {}).get("max_payload", 65536)
         self.publisher = Publisher(hass, self.device_id, max_payload)
         self._unsubs: list[CALLBACK_TYPE] = []
+        self.views = ViewSync(hass, self)
         self._was_connected = True
 
     async def async_start(self) -> None:
@@ -47,23 +50,31 @@ class Device:
             mqtt.async_subscribe_connection_status(self._hass, self._on_connection)
         )
         issues.check_mqtt_birth(self._hass)
-        await self.async_publish_all()
-        self._entry.async_create_background_task(
+        await self.views.async_start()
+        self.entry.async_create_background_task(
             self._hass, self._async_clean_stale(), f"roundhouse stale {self.device_id}"
         )
 
     @callback
     def async_stop(self) -> None:
         """Unsubscribe."""
+        self.views.async_stop()
         while self._unsubs:
             self._unsubs.pop()()
 
+    def set_views(self, payload: dict[str, Any]) -> None:
+        """Set the `views` payload the next publish sends."""
+        self.views_payload = payload
+
     def _meta(self) -> bytes:
+        views_hash = (
+            layout.definition_hash(self.views_payload) if self.views_payload else ""
+        )
         return codec.encode(
             {
                 "contract": f"{codec.SUPPORTED_MAJOR}.0",
                 "language": self._hass.config.language,
-                "views_hash": "",
+                "views_hash": views_hash,
             }
         )
 
@@ -72,6 +83,13 @@ class Device:
 
         With a bad profile or a contract mismatch only `meta` is published.
         """
+        if self.error is None and self.views_payload is not None:
+            try:
+                await self.publisher.async_publish(
+                    "views", codec.encode(self.views_payload)
+                )
+            except PayloadTooLargeError as err:
+                _LOGGER.error("View definition not published: %s", err)
         await self.publisher.async_publish("meta", self._meta())
         if self.error is not None:
             await self.publisher.async_clear_all_except(frozenset({"meta"}))
@@ -82,7 +100,7 @@ class Device:
     @callback
     def _on_connection(self, connected: bool) -> None:
         if connected and not self._was_connected:
-            self._entry.async_create_background_task(
+            self.entry.async_create_background_task(
                 self._hass, self._async_resync(), f"roundhouse resync {self.device_id}"
             )
         self._was_connected = connected
@@ -100,12 +118,15 @@ class Device:
         except codec.ContractError as err:
             await self._on_bad_profile(err, payload)
             return
+        recovered = self.error is not None
         self.error = None
         issues.clear_profile_issue(self._hass, self.device_id)
+        if recovered and profile == self.profile:
+            await self.views.async_refresh()
         if profile != self.profile:
             _LOGGER.debug("Profile of %s changed", self.device_id)
             self._hass.config_entries.async_update_entry(
-                self._entry, data={**self._entry.data, CONF_PROFILE: profile}
+                self.entry, data={**self.entry.data, CONF_PROFILE: profile}
             )
 
     async def _on_bad_profile(self, err: codec.ContractError, payload: bytes) -> None:

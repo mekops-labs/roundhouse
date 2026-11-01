@@ -19,6 +19,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.roundhouse import layout
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 from custom_components.roundhouse.device import Device
 from custom_components.roundhouse.publisher import PayloadTooLargeError
@@ -59,9 +60,10 @@ async def test_setup_publishes_meta_retained(
     assert json.loads(payload) == {
         "contract": "1.0",
         "language": hass.config.language,
-        "views_hash": "",
+        "views_hash": layout.definition_hash(layout.EMPTY_VIEWS),
     }
-    assert device.publisher.owned == {"meta"}
+    # No dashboard exists yet, so the device holds an empty view definition.
+    assert device.publisher.owned == {"meta", "views"}
     await _settle(hass)
 
 
@@ -143,6 +145,8 @@ async def test_major_mismatch_raises_an_issue_and_clears_it(
     announce(hass, "tender01", tender_profile)
     await hass.async_block_till_done()
     assert ir.async_get(hass).async_get_issue(DOMAIN, "profile_tender01") is None
+    # Recovery publishes the view definition again, not only meta.
+    assert device.publisher.owned == {"meta", "views"}
     await _settle(hass)
 
 
@@ -191,7 +195,7 @@ async def test_reconnect_republishes_everything(
     async_dispatcher_send(hass, MQTT_CONNECTION_STATE, True)
     await hass.async_block_till_done(wait_background_tasks=True)
     topics = {t for t, *_ in published(mqtt_mock)}
-    assert topics == {PREFIX + "meta", PREFIX + "state/light.x"}
+    assert topics == {PREFIX + "meta", PREFIX + "views", PREFIX + "state/light.x"}
     await _settle(hass)
 
 

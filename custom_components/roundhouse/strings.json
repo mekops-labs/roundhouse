@@ -53,6 +53,18 @@
     "mqtt_birth_disabled": {
       "title": "The MQTT birth message is disabled",
       "description": "Devices learn that Home Assistant is up from the birth message on homeassistant/status. Enable it in the MQTT integration options."
+    },
+    "dashboard_strategy": {
+      "title": "The dashboard of {device} is auto-generated",
+      "description": "The dashboard of {device} has no cards of its own, so Roundhouse has nothing to show. Open the dashboard, choose Edit, and take control. Until then the device shows nothing."
+    },
+    "dashboard_deleted": {
+      "title": "The dashboard of {device} was deleted",
+      "description": "The dashboard of {device} no longer exists. The device shows nothing until you create a dashboard with the same URL path."
+    },
+    "view_overflow": {
+      "title": "View {view} does not fit on {device}",
+      "description": "The view {view} has too many tiles for {device}: remove {excess}. The densest layout holds {capacity}. The device keeps the last version that fitted."
     }
   }
 }

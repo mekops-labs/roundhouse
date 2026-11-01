@@ -8,11 +8,21 @@ See docs/ha-internals.md for the versions this was checked on.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components import websocket_api
-from homeassistant.components.lovelace.const import LOVELACE_DATA
-from homeassistant.core import HomeAssistant
+from homeassistant.components.lovelace.const import LOVELACE_DATA, ConfigNotFound
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+
+from .debounce import Debounce
+
+# Fired by Lovelace after a dashboard config is saved or deleted. The constant
+# moved between Home Assistant releases, so use the string.
+EVENT_LOVELACE_UPDATED = "lovelace_updated"
+
+# Wait for further saves before digesting again: the editor saves repeatedly.
+UPDATE_WAIT = 2.0
 
 LIST_COMMAND = "lovelace/dashboards/list"
 
@@ -80,3 +90,41 @@ async def async_ensure_dashboard(
     )
     await hass.data[LOVELACE_DATA].dashboards[url_path].async_save(STARTER_CONFIG)
     return True
+
+
+@dataclass(frozen=True)
+class DashboardState:
+    """What a dashboard holds right now.
+
+    `kind` is `config` (cards to digest), `strategy` (generated, no cards), or
+    `missing` (no such dashboard).
+    """
+
+    kind: str
+    config: dict[str, Any] | None = None
+
+
+async def async_load_dashboard(hass: HomeAssistant, url_path: str) -> DashboardState:
+    """Load a dashboard's config by URL path."""
+    dashboard = hass.data[LOVELACE_DATA].dashboards.get(url_path)
+    if dashboard is None:
+        return DashboardState("missing")
+    try:
+        config = await dashboard.async_load(False)
+    except ConfigNotFound:
+        return DashboardState("strategy")
+    return DashboardState("config", config)
+
+
+@callback
+def async_watch(
+    hass: HomeAssistant, url_path: str, debounce: Debounce
+) -> CALLBACK_TYPE:
+    """Trigger `debounce` when the dashboard is saved or deleted."""
+
+    @callback
+    def _on_event(event: Event) -> None:
+        if event.data.get("url_path") == url_path:
+            debounce.trigger()
+
+    return hass.bus.async_listen(EVENT_LOVELACE_UPDATED, _on_event)
