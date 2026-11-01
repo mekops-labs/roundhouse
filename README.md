@@ -13,6 +13,19 @@ Status: under development. No release yet.
 - Home Assistant stable or the release before it.
 - Home Assistant's `mqtt` integration, with the birth message enabled.
 
+## Entities
+
+Each panel is a Home Assistant device with:
+
+- a `device_tracker` for presence (home while online, and for the grace period
+  after it goes offline);
+- sensors for the battery level, the power mode (devices that sleep), the
+  contract version, the skipped cards, and the unread alerts;
+- a binary sensor for charging, when the device reports a charging state;
+- a `notify` entity.
+
+The battery and charging entities appear when the device first reports them.
+
 ## Alerts
 
 Call `roundhouse.send_alert` from an automation. Target one or more Roundhouse

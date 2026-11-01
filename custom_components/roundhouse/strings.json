@@ -116,5 +116,21 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "contract_version": {
+        "name": "Contract version"
+      },
+      "skipped_cards": {
+        "name": "Skipped cards"
+      },
+      "unread_alerts": {
+        "name": "Unread alerts"
+      },
+      "power_mode": {
+        "name": "Power mode"
+      }
+    }
   }
 }

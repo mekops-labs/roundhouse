@@ -9,11 +9,19 @@ from typing import Any
 from homeassistant.components import mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from . import codec, issues, layout
 from .alertmanager import AlertManager
 from .cmdhandler import CommandHandler
-from .const import CONF_DEVICE_ID, CONF_PROFILE, STALE_SETTLE_SECONDS
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_PROFILE,
+    STALE_SETTLE_SECONDS,
+    status_signal,
+    views_signal,
+)
+from .presencemanager import PresenceManager
 from .publisher import PayloadTooLargeError, Publisher
 from .statesync import StateSync
 from .viewsync import ViewSync
@@ -39,6 +47,9 @@ class Device:
         self.states = StateSync(hass, self)
         self.commands = CommandHandler(hass, self)
         self.alerts = AlertManager(hass, self)
+        self.presence = PresenceManager(hass, self)
+        self.status: dict[str, Any] | None = None
+        self.skipped_reasons: dict[str, int] = {}
         self.card_icons: dict[str, str] = {}
         self._was_connected = True
 
@@ -53,6 +64,20 @@ class Device:
                 encoding=None,
             )
         )
+        await self.presence.async_start()
+        for name, handler in (
+            ("availability", self._on_availability),
+            ("status", self._on_status),
+        ):
+            self._unsubs.append(
+                await mqtt.async_subscribe(
+                    self._hass,
+                    f"roundhouse/{self.device_id}/{name}",
+                    handler,
+                    qos=1,
+                    encoding=None,
+                )
+            )
         self._unsubs.append(
             await mqtt.async_subscribe(
                 self._hass,
@@ -78,15 +103,21 @@ class Device:
         self.views.async_stop()
         self.states.async_stop()
         self.alerts.async_stop()
+        self.presence.async_stop()
         while self._unsubs:
             self._unsubs.pop()()
 
     def set_views(
-        self, payload: dict[str, Any], card_icons: dict[str, str] | None = None
+        self,
+        payload: dict[str, Any],
+        card_icons: dict[str, str] | None = None,
+        skipped_reasons: dict[str, int] | None = None,
     ) -> None:
         """Set the `views` payload the next publish sends."""
         self.views_payload = payload
         self.card_icons = card_icons or {}
+        self.skipped_reasons = dict(skipped_reasons or {})
+        async_dispatcher_send(self._hass, views_signal(self.device_id))
 
     def tiles_for(self, entity_id: str) -> list[dict[str, Any]]:
         """Return the published tiles that show an entity."""
@@ -151,6 +182,26 @@ class Device:
     async def _async_resync(self) -> None:
         issues.check_mqtt_birth(self._hass)
         await self.publisher.async_resync()
+
+    async def _on_availability(self, msg: mqtt.ReceiveMessage) -> None:
+        if not isinstance(msg.payload, bytes):
+            return
+        try:
+            value = codec.decode("availability", msg.payload)
+        except codec.ContractError as err:
+            _LOGGER.debug("Ignoring availability of %s: %s", self.device_id, err)
+            return
+        await self.presence.async_on_availability(value)
+
+    async def _on_status(self, msg: mqtt.ReceiveMessage) -> None:
+        if not isinstance(msg.payload, bytes) or not msg.payload:
+            return
+        try:
+            self.status = codec.decode("status", msg.payload)
+        except codec.ContractError as err:
+            _LOGGER.debug("Ignoring status of %s: %s", self.device_id, err)
+            return
+        async_dispatcher_send(self._hass, status_signal(self.device_id))
 
     async def _on_cmd(self, msg: mqtt.ReceiveMessage) -> None:
         if isinstance(msg.payload, bytes):

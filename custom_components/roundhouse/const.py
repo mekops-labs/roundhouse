@@ -32,3 +32,18 @@ DEFAULT_SEVERITY = "event"
 def alerts_signal(device_id: str) -> str:
     """Return the dispatcher signal sent when a device's alerts change."""
     return f"{DOMAIN}_alerts_{device_id}"
+
+
+def status_signal(device_id: str) -> str:
+    """Return the signal sent when a device's `status` changes."""
+    return f"{DOMAIN}_status_{device_id}"
+
+
+def views_signal(device_id: str) -> str:
+    """Return the signal sent when a device's view definition changes."""
+    return f"{DOMAIN}_views_{device_id}"
+
+
+def presence_signal(device_id: str) -> str:
+    """Return the signal sent when a device's presence changes."""
+    return f"{DOMAIN}_presence_{device_id}"

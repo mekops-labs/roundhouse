@@ -10,6 +10,13 @@ from homeassistant.helpers.device_registry import DeviceEntry, DeviceInfo
 from .const import CONF_DEVICE_ID, CONF_MODEL, CONF_PROFILE, DOMAIN
 
 
+def _versions(profile: dict[str, str]) -> str | None:
+    fw, wapp = profile.get("fw"), profile.get("wapp")
+    if fw and wapp:
+        return f"{fw} (wapp {wapp})"
+    return fw or None
+
+
 def device_info(entry: ConfigEntry) -> DeviceInfo:
     """Describe the device of a config entry, from its announced profile."""
     device_id: str = entry.data[CONF_DEVICE_ID]
@@ -19,7 +26,7 @@ def device_info(entry: ConfigEntry) -> DeviceInfo:
         identifiers={(DOMAIN, device_id)},
         name=f"{model.capitalize()} {device_id}",
         model=model,
-        sw_version=profile.get("fw"),
+        sw_version=_versions(profile),
     )
 
 

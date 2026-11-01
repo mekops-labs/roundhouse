@@ -131,6 +131,21 @@ the entity's `min` and `max` (`min_temp` and `max_temp`, `min_humidity` and
 `max_humidity`). Every other domain has no actions. A command never carries a
 code or any credential.
 
+## Availability, status, and presence
+
+`availability` is the text `online` or `offline`, retained. A device publishes
+`online` when it connects and sets `offline` as its last will, so the broker
+publishes it when the session ends. `status` carries `battery` (0-100, absent
+or null without a battery), `charging` (true, false, or null), and
+`power_mode`.
+
+Home Assistant reads presence from `availability` alone. A device is `home`
+while it is online. When it goes offline it stays `home` for a grace period
+(2 hours by default) and then reads `not_home`, so a device that sleeps with its
+radio off between refreshes does not flap. Before the first `availability`
+message the state is unknown. A restart of Home Assistant does not restart the
+grace period.
+
 ## Alerts
 
 `alert/<id>` carries `title`, `message`, `severity`, `time` (Unix seconds),

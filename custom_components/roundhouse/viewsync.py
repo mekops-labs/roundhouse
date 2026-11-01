@@ -104,7 +104,7 @@ class ViewSync:
             kind = "deleted" if state.kind == "missing" else "strategy"
             issues.raise_dashboard_issue(self._hass, device.device_id, kind)
             self._reset()
-            device.set_views(dict(layout.EMPTY_VIEWS), {})
+            device.set_views(dict(layout.EMPTY_VIEWS), {}, {})
             return
 
         result = digest.digest(state.config, self._friendly_name)
@@ -124,6 +124,7 @@ class ViewSync:
                 "skipped": result.skipped_total,
             },
             card_icons,
+            result.skipped,
         )
         await self._store.async_save(
             {

@@ -11,3 +11,4 @@
 - Add alert image fetching and dithering (gray4 and rgb565) within the device's payload limit.
 - Run device commands behind an allowlist: per-domain actions, value checks against the entity and the tile, confirmation for lock and alarm actions, request-ID dedupe, a 10 s cap, and a result for every command.
 - Add alerts: `roundhouse.send_alert` and `roundhouse.acknowledge_alert`, a notify entity per device, persistent storage with aging, snapshots, action buttons routed through the command checks, and the `roundhouse_alert_acknowledged` event.
+- Add the device entities: battery, charging, power mode, contract version, skipped cards, unread alerts, and a presence tracker with a grace period that survives a restart.

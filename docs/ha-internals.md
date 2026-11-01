@@ -200,3 +200,21 @@ Checked on 2026.10.4 and 2026.9.4.
 - `asyncio.wait({task}, timeout=...)` leaves the task running when it times
   out; a task created with `hass.async_create_task` is awaited by
   `async_block_till_done`, which hides the timeout in a test that calls it.
+
+## Entities and presence
+
+Checked on 2026.10.4, 2026.9.4, and the 2026.11 beta for imports.
+
+- `TrackerEntity.location_name` and `_attr_location_name` are deprecated, with
+  removal in 2027.7, and Home Assistant logs a warning for an override.
+  `BaseScannerEntity` (2026.10 and later) takes `is_connected`, where `None`
+  keeps the state unknown. `ScannerEntity` is not usable: it takes its unique ID
+  from a MAC address and registers no device. The previous release only has
+  `TrackerEntity`, so `device_tracker.py` defines the entity for whichever exists.
+- `BinarySensorDeviceClass` and the tracker classes are re-exported from the
+  package on every release but defined in different modules; mypy needs an
+  ignore on the package import.
+- `freezer.tick(...)` followed by `async_fire_time_changed(hass)` moves both the
+  clock and the timers in a test, which is how the grace period is tested.
+- A retained message is delivered to a subscription once; deliver the second and
+  later ones with `retain=False`, as a broker does for a live update.

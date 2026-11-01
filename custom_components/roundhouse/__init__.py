@@ -14,7 +14,7 @@ from .device import Device
 from .deviceinfo import device_info
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-PLATFORMS = ["notify"]
+PLATFORMS = ["binary_sensor", "device_tracker", "notify", "sensor"]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
