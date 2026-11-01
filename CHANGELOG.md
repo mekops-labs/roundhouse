@@ -7,3 +7,5 @@
 - Add the reference codec, checked against every vector in CI.
 - Add discovery, the setup flow with dashboard creation, options, the retained-topic publisher with stale cleanup and resync, and repair issues.
 - Digest the dashboard into a view definition: supported cards, stacks, tile features, layouts, overflow handling, and repair issues for strategy, deleted, and overflowing dashboards.
+- Render entity states for the device: translated state text, icons from a bundled Material Design Icons font as 4-bit masks, colors, detail-page attributes, and retained `state/` and `icon/` topics.
+- Add alert image fetching and dithering (gray4 and rgb565) within the device's payload limit.

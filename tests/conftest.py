@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +16,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_mqtt_message,
 )
 
+from custom_components.roundhouse import icons, images
 from custom_components.roundhouse.const import (
     CONF_DEVICE_ID,
     CONF_MODEL,
@@ -82,3 +85,54 @@ def make_entry(
 def expected_lingering_timers() -> bool:
     """Allow the MQTT client's own periodic timer, which a mocked client leaves."""
     return True
+
+
+def _outside_the_loop(name: str, func: Any, cold: Any = None) -> Any:
+    """Wrap `func` so a call on the event loop thread fails the test."""
+
+    def guarded(*args: Any, **kwargs: Any) -> Any:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return func(*args, **kwargs)
+        if cold is None or cold():
+            raise AssertionError(f"{name} ran in the event loop (NFR-1)")
+        return func(*args, **kwargs)
+
+    guarded.__name__ = name
+    return guarded
+
+
+@pytest.fixture(autouse=True)
+def no_blocking_calls(
+    request: pytest.FixtureRequest,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[None]:
+    """Fail a test that rasterizes, dithers, or loads icon data in the event loop.
+
+    Home Assistant only reports file I/O in the loop in a real run, so the
+    heavy functions are wrapped here. Home Assistant's own report fails the
+    test too.
+    """
+    for module, names in ((icons, ("mask", "warm")), (images, ("encode", "_open"))):
+        for name in names:
+            monkeypatch.setattr(
+                module, name, _outside_the_loop(name, getattr(module, name))
+            )
+    names = icons._names
+    names.cache_clear()  # every test starts cold, so a missing warm-up is caught
+    monkeypatch.setattr(
+        icons,
+        "_names",
+        _outside_the_loop(
+            "_names", names, cold=lambda: names.cache_info().currsize == 0
+        ),
+    )
+    yield
+    hits = [
+        r.getMessage()
+        for r in caplog.records
+        if "Detected blocking call" in r.getMessage()
+    ]
+    assert not hits, hits

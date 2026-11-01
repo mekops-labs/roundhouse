@@ -397,3 +397,32 @@ def test_garbage_config_digests_to_nothing() -> None:
     assert run({}).views == []
     assert run({"views": "x"}).views == []
     assert run({"views": [None, 3]}).views == []
+
+
+def test_card_and_row_icons_are_carried_but_not_published() -> None:
+    result = run(
+        {
+            "views": [
+                {
+                    "cards": [
+                        {"type": "tile", "entity": "light.ceiling", "icon": "mdi:lamp"},
+                        {
+                            "type": "entities",
+                            "entities": [
+                                {"entity": "switch.pump", "icon": "mdi:pump"},
+                                "sensor.temp",
+                            ],
+                        },
+                        {"type": "button", "entity": "scene.x", "icon": 5},
+                    ]
+                }
+            ]
+        }
+    )
+    assert [t.icon for t in result.views[0].tiles] == [
+        "mdi:lamp",
+        "mdi:pump",
+        None,
+        None,
+    ]
+    assert all("icon" not in t.as_dict() for t in result.views[0].tiles)

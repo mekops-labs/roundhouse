@@ -65,6 +65,7 @@ class Tile:
     kind: str
     domain: str
     controls: tuple[dict[str, Any], ...] = ()
+    icon: str | None = None  # the card's icon override; not part of the contract
 
     def as_dict(self) -> dict[str, Any]:
         """Return the contract shape of a tile."""
@@ -144,6 +145,7 @@ def _tile(
     features: Any,
     friendly_name: Callable[[str], str | None],
     skip: Callable[[str], None],
+    icon: Any = None,
 ) -> Tile | None:
     if not isinstance(entity, str) or not _ENTITY_ID.match(entity):
         skip(SKIP_NO_ENTITY)
@@ -155,6 +157,7 @@ def _tile(
         kind=tile_kind(entity),
         domain=page_domain(entity),
         controls=_controls(features, skip),
+        icon=icon if isinstance(icon, str) and icon else None,
     )
 
 
@@ -179,7 +182,12 @@ def _walk(
         elif ctype in _ENTITY_CARDS:
             features = card.get("features") if ctype == "tile" else None
             tile = _tile(
-                card.get("entity"), card.get("name"), features, friendly_name, skip
+                card.get("entity"),
+                card.get("name"),
+                features,
+                friendly_name,
+                skip,
+                card.get("icon"),
             )
             if tile:
                 tiles.append(tile)
@@ -201,7 +209,14 @@ def _rows(
         if isinstance(row, str):
             tile = _tile(row, None, None, friendly_name, skip)
         elif isinstance(row, dict) and "entity" in row:
-            tile = _tile(row["entity"], row.get("name"), None, friendly_name, skip)
+            tile = _tile(
+                row["entity"],
+                row.get("name"),
+                None,
+                friendly_name,
+                skip,
+                row.get("icon"),
+            )
         elif isinstance(row, dict):
             skip(SKIP_UNSUPPORTED_TYPE)
             continue

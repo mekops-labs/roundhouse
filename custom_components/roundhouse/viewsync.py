@@ -104,7 +104,7 @@ class ViewSync:
             kind = "deleted" if state.kind == "missing" else "strategy"
             issues.raise_dashboard_issue(self._hass, device.device_id, kind)
             self._reset()
-            device.set_views(dict(layout.EMPTY_VIEWS))
+            device.set_views(dict(layout.EMPTY_VIEWS), {})
             return
 
         result = digest.digest(state.config, self._friendly_name)
@@ -114,12 +114,16 @@ class ViewSync:
         self.last_digest, self.last_overflows = result, overflows
         self._entities = frozenset(t.entity_id for v in result.views for t in v.tiles)
         option = device.entry.options.get(OPT_SNAPSHOT_VIEW, "")
+        card_icons = {
+            t.entity_id: t.icon for v in result.views for t in v.tiles if t.icon
+        }
         device.set_views(
             {
                 "views": published,
                 "snapshot_view": layout.snapshot_view(published, profile, option),
                 "skipped": result.skipped_total,
-            }
+            },
+            card_icons,
         )
         await self._store.async_save(
             {

@@ -54,6 +54,41 @@ page of their base domain: `input_number` is `number`, `input_select` is
 `readonly` for every other domain. `controls` is absent when the tile restricts
 nothing: the detail page then shows every control the entity supports.
 
+## State message
+
+`state/<entity_id>` carries what a tile and its detail page show.
+
+- `text` is the state text in Home Assistant's language. It starts with a
+  capital letter. A missing entity reads as unavailable.
+- `on` is true while the tile is active and drawn inverted. Off states are
+  `off`, `closed`, `locked`, `idle`, `standby`, `disarmed`, `not_home`,
+  `unavailable`, `unknown`, `paused`, `none`, and `stopped`. A `climate` entity
+  is active while its action is not `off` or `idle`; an alarm panel while it is
+  armed, pending, or triggered; a `lock` while it is unlocked.
+- `available` is false for `unavailable` and for an entity that does not exist.
+- `icon` is the name of the icon in use. The mask is on `icon/<name>`. A name
+  outside the bundled icon font becomes `mdi:help-circle-outline`.
+- `color` is `[r, g, b]` while the tile is active, else null: a light's own
+  color, or its domain's active color. A `gray4` device ignores it.
+- `attributes` holds what the detail page of the domain needs (next section).
+
+## Attributes by domain
+
+Every mode and option is a `{value, label}` pair. Other values are plain.
+
+| Domain | Keys |
+| --- | --- |
+| `climate` | `current_temperature`, `current_humidity`, `temperature`, `target_temp_low`, `target_temp_high`, `humidity`, `min_temp`, `max_temp`, `target_temp_step`; pairs `hvac_action`, `hvac_mode`, `fan_mode`, `preset_mode`, `swing_mode`; lists of pairs `hvac_modes`, `fan_modes`, `preset_modes`, `swing_modes` |
+| `water_heater` | `current_temperature`, `temperature`, `min_temp`, `max_temp`; pair `operation_mode`; list `operation_modes` |
+| `humidifier` | `current_humidity`, `humidity`, `min_humidity`, `max_humidity`; pair `mode`; list `modes` |
+| `fan` | `percentage`, `percentage_step`; pair `preset_mode`; list `preset_modes` |
+| `number` | `value`, `min`, `max`, `step`, `unit`, `mode` |
+| `select` | pair `option`; list `options` |
+| `cover`, `valve` | `position`, `supports_position` |
+| `light` | `brightness` (0-255), `color_temp_kelvin`, `min_color_temp_kelvin`, `max_color_temp_kelvin` |
+
+A key is absent when the entity has no such value.
+
 ## Control types
 
 The `controls` list of a tile names the controls of its detail page, in order.

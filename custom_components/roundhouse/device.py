@@ -13,6 +13,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from . import codec, issues, layout
 from .const import CONF_DEVICE_ID, CONF_PROFILE, STALE_SETTLE_SECONDS
 from .publisher import PayloadTooLargeError, Publisher
+from .statesync import StateSync
 from .viewsync import ViewSync
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +34,8 @@ class Device:
         self.publisher = Publisher(hass, self.device_id, max_payload)
         self._unsubs: list[CALLBACK_TYPE] = []
         self.views = ViewSync(hass, self)
+        self.states = StateSync(hass, self)
+        self.card_icons: dict[str, str] = {}
         self._was_connected = True
 
     async def async_start(self) -> None:
@@ -59,12 +62,23 @@ class Device:
     def async_stop(self) -> None:
         """Unsubscribe."""
         self.views.async_stop()
+        self.states.async_stop()
         while self._unsubs:
             self._unsubs.pop()()
 
-    def set_views(self, payload: dict[str, Any]) -> None:
+    def set_views(
+        self, payload: dict[str, Any], card_icons: dict[str, str] | None = None
+    ) -> None:
         """Set the `views` payload the next publish sends."""
         self.views_payload = payload
+        self.card_icons = card_icons or {}
+
+    def _tracked_entities(self) -> frozenset[str]:
+        if self.error is not None or not self.views_payload:
+            return frozenset()
+        return frozenset(
+            t["entity_id"] for v in self.views_payload["views"] for t in v["tiles"]
+        )
 
     def _meta(self) -> bytes:
         views_hash = (
@@ -90,6 +104,7 @@ class Device:
                 )
             except PayloadTooLargeError as err:
                 _LOGGER.error("View definition not published: %s", err)
+        await self.states.async_sync(self._tracked_entities(), self.card_icons)
         await self.publisher.async_publish("meta", self._meta())
         if self.error is not None:
             await self.publisher.async_clear_all_except(frozenset({"meta"}))

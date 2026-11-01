@@ -140,3 +140,27 @@ version. One version cannot test two releases:
   wait minus 0.5 s to assert that nothing fired yet.
 - A config entry that depends on `lovelace` sets Lovelace up for real in tests;
   a test that wants a missing dashboard needs no fixture for it.
+
+## Translations, icons, and images
+
+Checked on 2026.10.4 and 2026.9.4.
+
+- `translation.async_get_cached_translations(hass, lang, category)` without an
+  `integration` only returns the integrations in `hass.config.top_level_components`.
+  Pass the integration (the domain, or the platform for `entity`) to read one
+  whose translations were loaded with `async_get_translations`. Roundhouse looks
+  keys up itself: `component.<domain>.entity_component.<device_class|_>.state.<value>`
+  and `...state_attributes.<attribute>.state.<value>`; for platform entities
+  `component.<platform>.entity.<domain>.<translation_key>.state.<value>`.
+- Core does not translate `unavailable` and `unknown`; the frontend does.
+  Roundhouse carries its own small table and falls back to English.
+- `icon.async_get_icons(hass, "entity_component", [domain])` returns
+  `{domain: {"_": {"default": ..., "state": {...}}, "<device_class>": {...}}}`.
+- Block detection of file calls is skipped in tests
+  (`skip_for_tests=True`), so a test cannot rely on Home Assistant's warning.
+  Roundhouse's tests wrap the rasterizer, the dither, and the name-map load and
+  fail when they run on the event-loop thread.
+- Sensor display precision lives in the entity registry options:
+  `entry.options["sensor"]["display_precision"]`.
+- The Material Design Icons font and name map are bundled; see
+  `custom_components/roundhouse/mdi/README.md` for the pinned version.
