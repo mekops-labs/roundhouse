@@ -202,5 +202,5 @@ class Publisher:
         stale = sorted(s for s in seen if _is_ours(s) and s not in self._published)
         for subtopic in stale:
             _LOGGER.debug("Clearing stale retained topic %s%s", self._prefix, subtopic)
-            await self._send(subtopic, b"")
+            await self._try_clear(subtopic)
         return stale

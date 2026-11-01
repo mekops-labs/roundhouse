@@ -274,3 +274,30 @@ async def test_unloading_cancels_the_retry_timer(
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert publisher._retry is None
+
+
+async def test_a_failed_stale_clear_at_startup_is_retried(
+    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+) -> None:
+    import asyncio
+
+    entry = await setup(hass, tender_profile, config(("home", [])))
+    publisher = hass.data[DOMAIN][entry.entry_id].publisher
+    await asyncio.sleep(0)  # let the cleanup task subscribe
+    for sub in ("state/light.gone", "alert/dead"):
+        async_fire_mqtt_message(hass, PREFIX + sub, "x", retain=True)
+    await go_down(mqtt_mock)
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+    assert publisher._unsent_clear == {"state/light.gone", "alert/dead"}
+
+    mqtt_mock.async_publish.side_effect = None
+    mqtt_mock.async_publish.reset_mock()
+    async_fire_time_changed(
+        hass, dt_util.utcnow() + timedelta(seconds=RETRY_SECONDS + 30)
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    cleared = {
+        c.args[0] for c in mqtt_mock.async_publish.call_args_list if c.args[1] == b""
+    }
+    assert {PREFIX + "state/light.gone", PREFIX + "alert/dead"} <= cleared
+    assert not publisher._unsent_clear
