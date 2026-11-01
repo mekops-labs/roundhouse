@@ -59,7 +59,9 @@ def _devices(hass: HomeAssistant, call: ServiceCall, *, required: bool) -> list[
     ids: list[str] = call.data.get("device_id") or []
     if not ids:
         if required:
-            raise ServiceValidationError("Target at least one Roundhouse device")
+            raise ServiceValidationError(
+                "Give at least one Roundhouse device in device_id"
+            )
         return list(runtimes.values())
     registry = dr.async_get(hass)
     found: list[Device] = []

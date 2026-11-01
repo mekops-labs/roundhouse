@@ -1,8 +1,11 @@
 send_alert:
-  target:
-    device:
-      integration: roundhouse
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: roundhouse
+          multiple: true
     title:
       required: true
       example: Motion at the gate
@@ -39,10 +42,12 @@ send_alert:
       selector:
         text:
 acknowledge_alert:
-  target:
-    device:
-      integration: roundhouse
   fields:
+    device_id:
+      selector:
+        device:
+          integration: roundhouse
+          multiple: true
     alert_id:
       selector:
         text:

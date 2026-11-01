@@ -72,6 +72,10 @@
       "name": "Send alert",
       "description": "Show an alert on one or more panels, with an optional snapshot and action buttons.",
       "fields": {
+        "device_id": {
+          "name": "Devices",
+          "description": "The Roundhouse panels that show the alert."
+        },
         "title": {
           "name": "Title",
           "description": "The alert title."
@@ -106,6 +110,10 @@
       "name": "Acknowledge alert",
       "description": "Mark alerts as read, by alert ID or by tag. Without a target, every panel is searched.",
       "fields": {
+        "device_id": {
+          "name": "Devices",
+          "description": "Limit the search to these panels. Without it, every panel is searched."
+        },
         "alert_id": {
           "name": "Alert ID",
           "description": "The ID of the alert."

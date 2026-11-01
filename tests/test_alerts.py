@@ -465,7 +465,7 @@ async def test_the_default_severity_is_event(
 async def test_a_target_is_required_and_must_be_a_roundhouse_device(
     hass: HomeAssistant, device: Any
 ) -> None:
-    with pytest.raises(ServiceValidationError, match="Target at least one"):
+    with pytest.raises(ServiceValidationError, match="at least one Roundhouse device"):
         await hass.services.async_call(
             DOMAIN, "send_alert", {"title": "t", "message": "m"}, blocking=True
         )

@@ -37,14 +37,14 @@ The battery and charging entities appear when the device first reports them.
 
 ## Alerts
 
-Call `roundhouse.send_alert` from an automation. Target one or more Roundhouse
-devices; the call returns the alert ID of each.
+Call `roundhouse.send_alert` from an automation. Name one or more Roundhouse
+devices in `device_id`; the call returns the alert ID of each.
 
 ```yaml
 action: roundhouse.send_alert
-target:
-  device_id: <panel device>
 data:
+  device_id:
+    - <panel device>
   title: Motion at the gate
   message: The gate camera saw a person.
   severity: critical        # critical, warning, or event (default)
