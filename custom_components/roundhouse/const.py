@@ -20,3 +20,15 @@ DEFAULT_ALERT_MAX_AGE_DAYS = 7
 STALE_SETTLE_SECONDS = 2.0
 
 ISSUE_MQTT_BIRTH = "mqtt_birth_disabled"
+
+EVENT_ALERT_ACKNOWLEDGED = "roundhouse_alert_acknowledged"
+SERVICE_SEND_ALERT = "send_alert"
+SERVICE_ACKNOWLEDGE_ALERT = "acknowledge_alert"
+
+SEVERITIES = ("critical", "warning", "event")
+DEFAULT_SEVERITY = "event"
+
+
+def alerts_signal(device_id: str) -> str:
+    """Return the dispatcher signal sent when a device's alerts change."""
+    return f"{DOMAIN}_alerts_{device_id}"
