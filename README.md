@@ -75,6 +75,9 @@ mise run setup      # test dependencies into .venv
 mise run check      # ruff, mypy, pytest, and the panel's JavaScript tests
 ```
 
+To try the integration against a real Home Assistant, see "Trying it by hand" in
+`CONTRIBUTING.md`.
+
 Home Assistant internals the integration relies on are recorded in
 `docs/ha-internals.md`, with the versions they were checked on.
 

@@ -16,6 +16,23 @@
 - Run blocking work in the executor. A blocking-call warning fails a test.
 - Access an unstable Home Assistant internal from one module only.
 
+## Trying it by hand
+
+`tools/rig/` starts a throwaway Home Assistant and Mosquitto in Podman, with the
+integration mounted read-only. Nothing in it is shipped or used by the tests;
+its state lives in `~/.cache/roundhouse-dev/rig`.
+
+```sh
+mise run rig -- up            # containers, waits until Home Assistant answers
+mise run rig -- onboard       # owner, token, MQTT integration
+mise run double -- tender &   # a device double: tender or wall
+mise run rig -- confirm       # accept the discovered device
+mise run rig -- seed          # demo states and a dashboard (--scenario overflow)
+mise run rig -- shot          # screenshot the Roundhouse panel (Playwright container)
+mise run rig -- logs
+mise run rig -- down
+```
+
 ## Documentation
 
 - Write one instruction in each sentence.

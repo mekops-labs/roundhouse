@@ -26,6 +26,14 @@ run = "pytest -q"
 description = "Run the preview panel tests"
 run = "node --test \"tests/js/*.test.mjs\""
 
+[tasks.rig]
+description = "Drive the throwaway Home Assistant rig (Podman): up, onboard, confirm, seed, shot, logs, down"
+run = "python tools/rig/rig.py"
+
+[tasks.double]
+description = "Run a device double: tender or wall"
+run = "python tools/rig/double.py"
+
 [tasks.check]
 description = "Lint, then test"
 depends = ["lint", "test", "test-js"]
