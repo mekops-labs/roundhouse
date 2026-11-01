@@ -73,13 +73,32 @@ async def main() -> None:
         if args.poke:
             started = await page.evaluate("() => performance.now()")
             for item in json.loads(args.poke):
+                if (
+                    "save" in item
+                ):  # a dashboard save through the frontend's own connection
+                    await page.evaluate(
+                        "async (save) => { await document.querySelector('home-assistant').hass.callWS("
+                        "{type: 'lovelace/config/save', url_path: save.url_path, config: save.config}); }",
+                        item["save"],
+                    )
+                    continue
                 await page.evaluate(
                     "async ([token, item]) => { await fetch('/api/states/' + item.entity, {method: 'POST',"
                     " headers: {Authorization: 'Bearer ' + token, 'Content-Type': 'application/json'},"
                     " body: JSON.stringify({state: item.state, attributes: item.attributes || {}})}); }",
                     [stored["access_token"], item],
                 )
-            await page.wait_for_timeout(args.after)
+            before = json.dumps((await page.evaluate(COUNT)).get("sections"))
+            changed = None
+            for _ in range(int(args.after / 50)):
+                await page.wait_for_timeout(50)
+                if json.dumps((await page.evaluate(COUNT)).get("sections")) != before:
+                    changed = round(
+                        await page.evaluate("() => performance.now()") - started
+                    )
+                    break
+            print("panel redrawn after:", changed, "ms")
+            await page.wait_for_timeout(300)
             await page.screenshot(path=args.out.replace(".png", "-after.png"))
             print(
                 "after the poke:",

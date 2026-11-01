@@ -36,6 +36,8 @@ CLIENT = f"{BASE}/"
 HA_IMAGE = "ghcr.io/home-assistant/home-assistant:stable"
 MQTT_IMAGE = "docker.io/library/eclipse-mosquitto:2"
 NET = "rhdev"
+# The Playwright container image and the matching Python package.
+PLAYWRIGHT = "1.64.1"
 OWNER = {"name": "Rig", "username": "rig", "password": "redacted"}
 
 CONFIGURATION = """\
@@ -71,6 +73,7 @@ def up(language: str) -> None:
     conf = RIG / "config/configuration.yaml"
     if not conf.exists():
         conf.write_text(CONFIGURATION.format(language=language))
+    podman("rm", "-f", "rh-ha", "rh-mqtt", check=False)  # `up` can be run again
     podman("network", "create", NET, check=False)
     podman(
         "run",
@@ -360,16 +363,7 @@ def screenshot(
         "refresh_token": saved["refresh_token"],
     }
     (RIG / "browser-tokens.json").write_text(json.dumps(stored))
-    version = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import importlib.metadata as m;print(m.version('playwright'))",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
+    version = PLAYWRIGHT
     result = podman(
         "run",
         "--rm",
