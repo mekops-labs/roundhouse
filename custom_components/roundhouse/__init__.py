@@ -8,10 +8,11 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
-from . import services
+from . import preview, services
 from .const import DOMAIN
 from .device import Device
 from .deviceinfo import device_info
+from .panelreg import async_register_panel
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["binary_sensor", "device_tracker", "notify", "sensor"]
@@ -20,6 +21,8 @@ PLATFORMS = ["binary_sensor", "device_tracker", "notify", "sensor"]
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the services."""
     services.async_register(hass)
+    preview.async_register_commands(hass)
+    await async_register_panel(hass)
     return True
 
 

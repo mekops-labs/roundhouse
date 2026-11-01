@@ -40,6 +40,8 @@ class ViewSync:
         self._unsubs: list[CALLBACK_TYPE] = []
         self.last_digest: digest.DigestResult | None = None
         self.last_overflows: list[layout.Overflow] = []
+        # `config`, `strategy`, or `missing`; None before the first digest.
+        self.dashboard_state: str | None = None
 
     async def async_start(self) -> None:
         """Load the stored definitions, publish, and watch for changes."""
@@ -96,6 +98,9 @@ class ViewSync:
         device = self._device
         state = await lovelace_io.async_load_dashboard(self._hass, self._slug)
         issues.clear_dashboard_issues(self._hass, device.device_id)
+        self.dashboard_state = state.kind
+        if state.config is not None and digest.is_strategy(state.config):
+            self.dashboard_state = "strategy"
         if (
             state.kind != "config"
             or state.config is None

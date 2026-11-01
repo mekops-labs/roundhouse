@@ -39,6 +39,11 @@ class StateSync:
         self._unsubs: list[CALLBACK_TYPE] = []
         self._lock = asyncio.Lock()
 
+    @property
+    def translator(self) -> rendering.Translator:
+        """Return the translator, shared with the preview."""
+        return self._translator
+
     @callback
     def async_stop(self) -> None:
         """Stop tracking."""

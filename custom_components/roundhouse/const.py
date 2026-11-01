@@ -47,3 +47,9 @@ def views_signal(device_id: str) -> str:
 def presence_signal(device_id: str) -> str:
     """Return the signal sent when a device's presence changes."""
     return f"{DOMAIN}_presence_{device_id}"
+
+
+PANEL_URL_PATH = "roundhouse"
+PANEL_STATIC_URL = "/roundhouse_panel"
+WS_PREVIEW_DEVICES = "roundhouse/preview/devices"
+WS_PREVIEW_SUBSCRIBE = "roundhouse/preview/subscribe"

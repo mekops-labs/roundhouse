@@ -72,6 +72,7 @@ def make_entry(
     return MockConfigEntry(
         domain=DOMAIN,
         unique_id=device_id,
+        title=f"{profile['model'].capitalize()} {device_id}",
         data={
             CONF_DEVICE_ID: device_id,
             CONF_MODEL: profile["model"],

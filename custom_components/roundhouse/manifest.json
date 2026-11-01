@@ -2,7 +2,10 @@
   "domain": "roundhouse",
   "name": "Roundhouse",
   "after_dependencies": [
-    "camera"
+    "camera",
+    "frontend",
+    "http",
+    "panel_custom"
   ],
   "codeowners": [
     "@mekops-labs"
