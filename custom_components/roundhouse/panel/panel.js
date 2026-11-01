@@ -33,6 +33,7 @@ class RoundhousePanel extends HTMLElement {
     this._devices = [];
     this._deviceId = null;
     this._unsubscribe = null;
+    this._generation = 0; // bumped by _stop; a subscription from an older one is dropped
     this._frame = 0;
     this._error = null;
     this.attachShadow({ mode: "open" });
@@ -50,6 +51,8 @@ class RoundhousePanel extends HTMLElement {
 
   connectedCallback() {
     this._render();
+    // Re-attached after a navigation: follow the device again.
+    if (this._hass && this._deviceId && !this._unsubscribe) this._subscribe();
   }
 
   disconnectedCallback() {
@@ -61,7 +64,7 @@ class RoundhousePanel extends HTMLElement {
       this._devices = await this._hass.callWS({ type: "roundhouse/preview/devices" });
       this._deviceId = this._devices[0]?.device_id ?? null;
       this._render();
-      if (this._deviceId) await this._subscribe();
+      if (this._deviceId && this.isConnected) await this._subscribe();
     } catch (err) {
       this._fail(err);
     }
@@ -69,23 +72,31 @@ class RoundhousePanel extends HTMLElement {
 
   async _subscribe() {
     this._stop();
+    const generation = this._generation;
     this._model = emptyModel();
     this._error = null;
     const deviceId = this._deviceId;
     try {
-      this._unsubscribe = await this._hass.connection.subscribeMessage(
+      const unsubscribe = await this._hass.connection.subscribeMessage(
         (message) => {
+          if (generation !== this._generation) return;
           this._model = reduce(this._model, message);
           this._schedule();
         },
         { type: "roundhouse/preview/subscribe", device_id: deviceId },
       );
+      if (generation !== this._generation) {
+        unsubscribe(); // another device was picked, or the panel was detached
+        return;
+      }
+      this._unsubscribe = unsubscribe;
     } catch (err) {
-      this._fail(err);
+      if (generation === this._generation) this._fail(err);
     }
   }
 
   _stop() {
+    this._generation += 1;
     if (this._unsubscribe) {
       this._unsubscribe();
       this._unsubscribe = null;
