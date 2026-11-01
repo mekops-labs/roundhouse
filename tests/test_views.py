@@ -190,6 +190,8 @@ async def test_overflow_keeps_the_last_good_definition(
     }
     assert "overflow_tender01_home" in notified
     assert "remove 3 tile(s)" in notified["overflow_tender01_home"]["message"]
+    assert issue.translation_key == "view_overflow"
+    assert "keeps the last version" in notified["overflow_tender01_home"]["message"]
 
     await save(hass, config(("home", tiles(15))))  # fits again
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
@@ -202,13 +204,20 @@ async def test_overflow_keeps_the_last_good_definition(
 async def test_new_overflowing_view_does_not_appear(
     hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
 ) -> None:
+    notified: dict[str, Any] = {}
+    pn.async_register_callback(hass, lambda _kind, items: notified.update(items))
     await setup(hass, tender_profile, config(("a", tiles(2))))
     await advance(hass, STALE_SETTLE_SECONDS + 1)
     await save(hass, config(("a", tiles(2)), ("b", tiles(16))))
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     paths = [v["path"] for v in views_publishes(mqtt_mock)[-1]["views"]]
     assert paths == ["a"]
-    assert ir.async_get(hass).async_get_issue(DOMAIN, "overflow_tender01_b") is not None
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, "overflow_tender01_b")
+    assert issue is not None
+    # The view never fitted, so nothing claims the device keeps a version.
+    assert issue.translation_key == "view_overflow_hidden"
+    message = notified["overflow_tender01_b"]["message"]
+    assert "does not show this view" in message and "keeps" not in message
 
 
 async def test_last_good_survives_a_restart(

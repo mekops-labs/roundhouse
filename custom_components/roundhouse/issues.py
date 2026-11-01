@@ -98,16 +98,26 @@ def raise_overflow(
     title: str,
     excess: int,
     capacity: int,
+    *,
+    kept: bool,
 ) -> None:
-    """Raise a repair issue and a notification for a view that does not fit."""
+    """Raise a repair issue and a notification for a view that does not fit.
+
+    `kept` tells whether the device keeps an earlier version that fitted.
+    """
     issue_id = overflow_issue_id(device_id, path)
+    outcome = (
+        "The device keeps the last version that fitted."
+        if kept
+        else "The device does not show this view."
+    )
     ir.async_create_issue(
         hass,
         DOMAIN,
         issue_id,
         is_fixable=False,
         severity=ir.IssueSeverity.ERROR,
-        translation_key="view_overflow",
+        translation_key="view_overflow" if kept else "view_overflow_hidden",
         translation_placeholders={
             "device": device_id,
             "view": title,
@@ -118,8 +128,7 @@ def raise_overflow(
     persistent_notification.async_create(
         hass,
         f"View '{title}' does not fit on {device_id}: remove {excess} tile(s), "
-        f"the densest layout holds {capacity}. The device keeps the last "
-        "version that fitted.",
+        f"the densest layout holds {capacity}. {outcome}",
         title="Roundhouse: view too large",
         notification_id=issue_id,
     )

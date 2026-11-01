@@ -24,6 +24,7 @@ class Overflow:
     title: str
     tiles: int
     capacity: int
+    kept: bool = False  # the device keeps an earlier version that fitted
 
     @property
     def excess(self) -> int:
@@ -68,8 +69,11 @@ def merge(
     for view in views:
         layout = choose_layout(profile, len(view.tiles))
         if layout is None:
-            overflows.append(Overflow(view.path, view.title, len(view.tiles), cap))
-            if view.path in last_good:
+            kept = view.path in last_good
+            overflows.append(
+                Overflow(view.path, view.title, len(view.tiles), cap, kept)
+            )
+            if kept:
                 published.append(last_good[view.path])
             continue
         published.append(

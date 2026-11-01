@@ -84,8 +84,8 @@ Roundhouse reports problems as repair issues (Settings, Repairs):
 | The MQTT birth message is disabled | see above | enable it |
 | The dashboard is auto-generated | no cards of its own | open it, choose Edit, take control |
 | The dashboard was deleted | removed in the UI | create a dashboard with the same URL path |
-| View does not fit | more tiles than the densest layout holds | remove the tiles it names |
+| View does not fit | more tiles than the densest layout holds | remove as many tiles as the issue states |
 
 The panel keeps the last version of a view that fitted until you fix the
-overflow. Set `custom_components.roundhouse` to `debug` in the Home Assistant
+overflow. A view that never fitted is not shown on the panel. Set `custom_components.roundhouse` to `debug` in the Home Assistant
 logger to see every command and its result.

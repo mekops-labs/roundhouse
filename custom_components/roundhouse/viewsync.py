@@ -160,5 +160,6 @@ class ViewSync:
                 o.title,
                 o.excess,
                 o.capacity,
+                kept=o.kept,
             )
         self._overflowing = now

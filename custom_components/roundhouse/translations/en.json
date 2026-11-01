@@ -65,6 +65,10 @@
     "view_overflow": {
       "title": "View {view} does not fit on {device}",
       "description": "The view {view} has too many tiles for {device}: remove {excess}. The densest layout holds {capacity}. The device keeps the last version that fitted."
+    },
+    "view_overflow_hidden": {
+      "title": "View {view} does not fit on {device}",
+      "description": "The view {view} has too many tiles for {device}: remove {excess}. The densest layout holds {capacity}. The device does not show this view."
     }
   },
   "services": {
