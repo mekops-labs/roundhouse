@@ -11,10 +11,14 @@ import logging
 from datetime import datetime
 
 from homeassistant.components import mqtt
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 
 _LOGGER = logging.getLogger(__name__)
+
+# A send that failed (the broker is away) is tried again this often.
+RETRY_SECONDS = 5.0
 
 # Topics Roundhouse publishes; the device owns every other topic under its prefix.
 _OWNED_PREFIXES = ("meta", "views", "state/", "icon/", "alert/")
@@ -39,7 +43,12 @@ class Publisher:
         self._hass = hass
         self._prefix = f"roundhouse/{device_id}/"
         self.max_payload = max_payload
+        # What each owned topic should hold. It is recorded before the send, so a
+        # failed send never leaves an older value to be republished later.
         self._published: dict[str, bytes] = {}
+        self._unsent: set[str] = set()  # owned topics whose last send failed
+        self._unsent_clear: set[str] = set()  # topics whose clearing failed
+        self._retry: CALLBACK_TYPE | None = None
 
     @property
     def owned(self) -> frozenset[str]:
@@ -57,16 +66,61 @@ class Publisher:
         )
 
     async def async_publish(self, subtopic: str, payload: bytes) -> bool:
-        """Publish a retained payload unless it is unchanged; return True if sent."""
+        """Publish a retained payload unless it is unchanged; return True if sent.
+
+        A failed send is not an error: the payload stays the desired value of the
+        topic, and it is sent again on a timer and after a reconnect.
+        """
         if len(payload) > self.max_payload:
             raise PayloadTooLargeError(
                 f"{self._prefix}{subtopic}: {len(payload)} > {self.max_payload}"
             )
-        if self._published.get(subtopic) == payload:
+        if self._published.get(subtopic) == payload and subtopic not in self._unsent:
             return False
-        await self._send(subtopic, payload)
         self._published[subtopic] = payload
+        self._unsent_clear.discard(subtopic)
+        return await self._try_send(subtopic, payload)
+
+    async def _try_send(self, subtopic: str, payload: bytes) -> bool:
+        try:
+            await self._send(subtopic, payload)
+        except (HomeAssistantError, TimeoutError) as err:
+            _LOGGER.warning(
+                "Not sent, will retry: %s%s (%s)",
+                self._prefix,
+                subtopic,
+                err or type(err).__name__,
+            )
+            self._unsent.add(subtopic)
+            self._arm_retry()
+            return False
+        self._unsent.discard(subtopic)
         return True
+
+    def _arm_retry(self) -> None:
+        if self._retry is None:
+            self._retry = async_call_later(self._hass, RETRY_SECONDS, self._on_retry)
+
+    async def _on_retry(self, _now: datetime) -> None:
+        self._retry = None
+        await self._flush()
+
+    async def _flush(self) -> None:
+        """Send again what failed."""
+        for subtopic in sorted(self._unsent):
+            if subtopic in self._published:
+                await self._try_send(subtopic, self._published[subtopic])
+            else:
+                self._unsent.discard(subtopic)
+        for subtopic in sorted(self._unsent_clear):
+            await self._try_clear(subtopic)
+
+    @callback
+    def async_stop(self) -> None:
+        """Cancel the retry timer."""
+        if self._retry is not None:
+            self._retry()
+            self._retry = None
 
     async def async_send_transient(self, subtopic: str, payload: bytes) -> None:
         """Send a message that is neither retained nor tracked, at QoS 1."""
@@ -86,7 +140,23 @@ class Publisher:
     async def async_clear(self, subtopic: str) -> None:
         """Clear one retained topic."""
         if self._published.pop(subtopic, None) is not None:
+            self._unsent.discard(subtopic)
+            await self._try_clear(subtopic)
+
+    async def _try_clear(self, subtopic: str) -> None:
+        try:
             await self._send(subtopic, b"")
+        except (HomeAssistantError, TimeoutError) as err:
+            _LOGGER.warning(
+                "Not cleared, will retry: %s%s (%s)",
+                self._prefix,
+                subtopic,
+                err or type(err).__name__,
+            )
+            self._unsent_clear.add(subtopic)
+            self._arm_retry()
+            return
+        self._unsent_clear.discard(subtopic)
 
     async def async_clear_all_except(self, keep: frozenset[str]) -> None:
         """Clear every owned topic that is not in `keep`."""
@@ -96,7 +166,9 @@ class Publisher:
     async def async_resync(self) -> None:
         """Publish every held payload again, for example after a reconnect."""
         for subtopic, payload in list(self._published.items()):
-            await self._send(subtopic, payload)
+            await self._try_send(subtopic, payload)
+        for subtopic in sorted(self._unsent_clear):
+            await self._try_clear(subtopic)
 
     async def async_clear_stale(self, settle: float) -> list[str]:
         """Clear retained topics under the prefix that this publisher does not own.

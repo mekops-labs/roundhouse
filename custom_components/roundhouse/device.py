@@ -104,6 +104,7 @@ class Device:
         self.states.async_stop()
         self.alerts.async_stop()
         self.presence.async_stop()
+        self.publisher.async_stop()
         while self._unsubs:
             self._unsubs.pop()()
 

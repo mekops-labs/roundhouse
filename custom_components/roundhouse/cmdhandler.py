@@ -122,9 +122,13 @@ class CommandHandler:
             del self._seen[oldest]
 
     async def _reply(self, req: str, result: str) -> None:
-        await self._device.publisher.async_send_transient(
-            "result", codec.encode({"req": req, "result": result})
-        )
+        try:
+            await self._device.publisher.async_send_transient(
+                "result", codec.encode({"req": req, "result": result})
+            )
+        except (HomeAssistantError, TimeoutError) as err:
+            # The device sees no result and retries with a new request ID.
+            _LOGGER.warning("Result of %s not sent: %s", req, err or type(err).__name__)
 
     async def _answer_malformed(self, payload: bytes, err: codec.ContractError) -> None:
         try:
