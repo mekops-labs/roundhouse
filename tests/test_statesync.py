@@ -327,3 +327,18 @@ async def test_encode_runs_in_the_executor_and_reports_bad_images(
     )
     with pytest.raises(rendering.ImageFetchError, match="undecodable"):
         await rendering.async_encode_image(hass, b"junk", "gray4", (32, 32), 10_000)
+
+
+async def test_the_wall_panel_gets_masks_at_its_own_icon_size(
+    hass: HomeAssistant, mqtt_mock: Any, lovelace: None
+) -> None:
+    from .conftest import make_entry
+
+    wall = vector("announce", "wall-panel")["payload"]
+    hass.states.async_set("light.l0", "on", {"rgb_color": [0, 255, 0]})
+    entry = make_entry(wall, "tender01", "tender-panel")
+    await setup(hass, wall, config(("home", cards("light.l0"))), entry=entry)
+    (mask,) = sent(mqtt_mock, "icon/mdi_lightbulb")
+    assert len(mask) == 48 * 24  # icon_px 48, two pixels per byte
+    assert last_state(mqtt_mock, "light.l0")["color"] == [0, 255, 0]
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
