@@ -119,12 +119,12 @@ class Subscription:
     def __init__(
         self,
         hass: HomeAssistant,
-        device: Device,
+        device_id: str,
         send: Callable[[dict[str, Any]], None],
     ) -> None:
         """Initialize the subscription."""
         self._hass = hass
-        self._device = device
+        self._device_id = device_id
         self._send = send
         self._unsubs: list[CALLBACK_TYPE] = []
         self._tracked: frozenset[str] = frozenset()
@@ -132,11 +132,15 @@ class Subscription:
         self._closed = False
         self._state_unsub: CALLBACK_TYPE | None = None
 
+    def _device(self) -> Device | None:
+        """Return the running device; a reload replaces the object."""
+        return _devices(self._hass).get(self._device_id)
+
     async def async_start(self) -> None:
         """Send the first snapshot and follow the device."""
         self._unsubs.append(
             async_dispatcher_connect(
-                self._hass, views_signal(self._device.device_id), self._on_views
+                self._hass, views_signal(self._device_id), self._on_views
             )
         )
         await self._push_snapshot()
@@ -153,19 +157,20 @@ class Subscription:
         self._hass.async_create_task(self._push_snapshot())
 
     async def _push_snapshot(self) -> None:
-        if self._closed:
+        device = self._device()
+        if self._closed or device is None or device.profile is None:
             return
-        snapshot = await build_snapshot(self._hass, self._device)
+        snapshot = await build_snapshot(self._hass, device)
         if self._closed:
             return
         self._send(snapshot)
-        self._track(snapshot)
+        self._track(device, snapshot)
 
-    def _track(self, snapshot: dict[str, Any]) -> None:
+    def _track(self, device: Device, snapshot: dict[str, Any]) -> None:
         entities = frozenset(
             t["entity_id"] for v in snapshot["views"] for t in v["tiles"]
         )
-        digest = self._device.views.last_digest
+        digest = device.views.last_digest
         self._cards = {
             t.entity_id: t.icon
             for v in (digest.views if digest else [])
@@ -187,10 +192,11 @@ class Subscription:
         self._hass.async_create_task(self._push_state(event.data["entity_id"]))
 
     async def _push_state(self, entity_id: str) -> None:
-        if self._closed or entity_id not in self._tracked:
+        device = self._device()
+        if self._closed or device is None or entity_id not in self._tracked:
             return
         states, icons = await render_states(
-            self._hass, self._device, {entity_id: self._cards.get(entity_id)}
+            self._hass, device, {entity_id: self._cards.get(entity_id)}
         )
         if not self._closed:
             self._send(
@@ -243,7 +249,7 @@ async def ws_subscribe(
     def send(payload: dict[str, Any]) -> None:
         connection.send_message(ws_messages.event_message(msg["id"], payload))
 
-    subscription = Subscription(hass, device, send)
+    subscription = Subscription(hass, device.device_id, send)
     connection.subscriptions[msg["id"]] = subscription.async_stop
     connection.send_result(msg["id"])
     await subscription.async_start()

@@ -406,3 +406,28 @@ def test_the_panel_imports_only_files_it_ships() -> None:
     assert (
         json.loads((PANEL_DIR.parent / "manifest.json").read_text())["domain"] == DOMAIN
     )
+
+
+async def test_the_preview_follows_the_device_through_a_reload(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    lovelace: None,
+    tender_profile: dict[str, Any],
+) -> None:
+    entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
+    client = await hass_ws_client(hass)
+    await subscribe(client)
+    assert len((await event(client))["views"][0]["tiles"]) == 1
+
+    # An options change reloads the entry and builds a new device runtime.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await save(hass, config(("home", cards("light.l0", "light.l1", "light.l2"))))
+    await advance(hass, lovelace_io.UPDATE_WAIT + 1)
+    counts = []
+    while 3 not in counts:  # `event` fails after 5 s without a message
+        snap = await event(client)
+        if snap["type"] == "snapshot":
+            counts.append(len(snap["views"][0]["tiles"]))
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
