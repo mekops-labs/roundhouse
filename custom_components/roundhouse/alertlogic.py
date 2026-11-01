@@ -137,9 +137,13 @@ def unread(alerts: Sequence[Mapping[str, Any]]) -> int:
 def expire(
     alerts: Sequence[Mapping[str, Any]], now: float, max_count: int, max_age_days: float
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Split alerts into (kept, dropped) by age, then by count, oldest first."""
+    """Split alerts into (kept, dropped) by age, then by count, oldest first.
+
+    `alerts` is in creation order; alerts raised in the same second keep it.
+    """
     oldest_allowed = now - max_age_days * SECONDS_PER_DAY
-    by_age = sorted(alerts, key=lambda a: (a["time"], a["id"]))
+    # A stable sort on whole seconds: a tie never puts a newer alert first.
+    by_age = sorted(alerts, key=lambda a: a["time"])
     fresh = [dict(a) for a in by_age if a["time"] >= oldest_allowed]
     dropped = [dict(a) for a in by_age if a["time"] < oldest_allowed]
     if len(fresh) > max_count:

@@ -579,6 +579,26 @@ async def test_alerts_age_out_by_count_and_lose_their_topics(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
+async def test_the_newest_alert_is_kept_when_alerts_share_a_second(
+    hass: HomeAssistant,
+    mqtt_mock: Any,
+    lovelace: None,
+    tender_profile: dict[str, Any],
+    clock: Any,
+) -> None:
+    from .conftest import make_entry
+
+    entry = make_entry(tender_profile)
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(entry, options={"alert_max_count": 1})
+    await setup(hass, tender_profile, config(("home", [])), entry=entry)
+    dev = hass.data[DOMAIN][entry.entry_id]
+    for i in range(5):  # the clock stands still: every alert has the same time
+        (alert_id,) = (await send(hass, title=f"a{i}")).values()
+        assert [a["id"] for a in dev.alerts.alerts] == [alert_id]
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
 async def test_alerts_age_out_by_time_and_an_expired_action_is_denied(
     hass: HomeAssistant, mqtt_mock: Any, device: Any, clock: Any
 ) -> None:

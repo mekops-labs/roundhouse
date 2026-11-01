@@ -152,7 +152,8 @@ def test_aging_boundaries_and_ties() -> None:
     assert dropped and not kept
     same = [alert("b", 10), alert("a", 10), alert("c", 10)]
     kept, dropped = al.expire(same, 11, 2, 1)
-    assert [a["id"] for a in dropped] == ["a"]  # a stable choice among equal times
+    assert [a["id"] for a in dropped] == ["b"]  # equal times: the first raised goes
+    assert [a["id"] for a in kept] == ["a", "c"]
     assert al.expire([], now, 1, 1) == ([], [])
 
 
