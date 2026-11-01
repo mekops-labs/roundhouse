@@ -33,6 +33,9 @@ COMMAND_DEADLINE = 15.0
 VIEWS_DEADLINE = 8.0
 ALERT_DEADLINE = 10.0
 RESYNC_DEADLINE = 60.0
+# After a restart an update waits for Home Assistant's own MQTT reconnect, then arrives.
+OUTAGE_GRACE = 30.0
+OUTAGE_DEADLINE = 25.0
 
 
 class Soak:
@@ -71,11 +74,16 @@ class Soak:
         }
         self.tiles: dict[str, list[str]] = {d.device_id: POOL[:5] for d in doubles}
         self.held = {d.device_id: False for d in doubles}
+        self.grace_until = 0.0
 
     def fail(self, text: str) -> None:
         """Record a failure."""
         print("FAIL:", text, flush=True)
         self.failures.append(text)
+
+    def state_deadline(self) -> float:
+        """The wait for a state update: longer for a short while after a restart."""
+        return OUTAGE_DEADLINE if now() < self.grace_until else STATE_DEADLINE
 
     def published(self, double: Double, entity_id: str) -> bool:
         """Whether the entity is on a published view of the device."""
@@ -109,15 +117,16 @@ class Soak:
         self.counts["ha_changes"] += 1
         for double in self.doubles:
             if self.published(double, entity):
+                deadline = self.state_deadline()
                 got = double.wait(
                     f"state/{entity}",
                     lambda b, w=want: isinstance(b, dict) and b["text"] == w,
                     started,
-                    STATE_DEADLINE,
+                    deadline,
                 )
                 if got is None:
                     self.fail(
-                        f"{double.device_id}: no state/{entity} == {want!r} within {STATE_DEADLINE}s"
+                        f"{double.device_id}: no state/{entity} == {want!r} within {deadline}s"
                     )
                 else:
                     self.latency["state"].append(got[0] - started)
@@ -301,7 +310,8 @@ class Soak:
         took = self.resync_complete(started)
         if took is not None:
             self.latency["ha_resync"].append(took)
-        self.verify_states("after an HA restart")
+        self.grace_until = now() + OUTAGE_GRACE
+        self.verify_states("after an HA restart", OUTAGE_DEADLINE)
         print(
             f"  HA restart: API in {ready:.1f}s, retained set complete in {took if took is None else round(took, 1)}s",
             flush=True,
@@ -327,8 +337,9 @@ class Soak:
             if self.ha.presence(double.device_id) != "home":
                 self.fail(f"{double.device_id}: not home after a broker restart")
         # A change after the restart must still arrive.
+        self.grace_until = now() + OUTAGE_GRACE
         self.ha_change()
-        self.verify_states("after a broker restart")
+        self.verify_states("after a broker restart", OUTAGE_DEADLINE)
         print(
             f"  broker restart: retained set complete in {took if took is None else round(took, 1)}s",
             flush=True,
@@ -342,9 +353,14 @@ class Soak:
             return "On" if state == "on" else "Off"
         return str(int(float(state)))
 
-    def verify_states(self, when: str) -> None:
-        """Every published tile's last state message must agree with Home Assistant."""
-        time.sleep(1.5)
+    def verify_states(self, when: str, settle: float = 3.0) -> None:
+        """Every published tile's last state message must agree with Home Assistant.
+
+        Updates that wait for a reconnect get `settle` seconds to arrive.
+        """
+        end = now() + settle
+        while now() < end and not self.consistent():
+            time.sleep(1)
         for double in self.doubles:
             if self.held[double.device_id]:
                 pass  # the device keeps showing the last good view; its tiles are still published
@@ -358,6 +374,17 @@ class Soak:
                     )
             if double.latest("meta") is None or double.latest("views") is None:
                 self.fail(f"{double.device_id}: meta or views missing ({when})")
+
+    def consistent(self) -> bool:
+        """Whether every published tile's last state message agrees with Home Assistant."""
+        for double in self.doubles:
+            for entity in set(self.tiles[double.device_id]):
+                latest = double.latest(f"state/{entity}")
+                if not isinstance(latest, dict) or latest["text"] != self.expected_text(
+                    entity
+                ):
+                    return False
+        return True
 
     def log_check(self) -> dict[str, int]:
         """Count blocking-call warnings and Roundhouse errors in the Home Assistant log."""

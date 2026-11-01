@@ -177,6 +177,9 @@ def up(language: str) -> None:
             urllib.request.urlopen(f"{BASE}/api/onboarding", timeout=2).read()
             print(" up")
             return
+        except urllib.error.HTTPError:  # a 404 after onboarding still means it answers
+            print(" up")
+            return
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             print(".", end="", flush=True)
             time.sleep(3)
@@ -239,7 +242,11 @@ def access() -> str:
 
 
 def onboard() -> None:
-    status = http("GET", "/api/onboarding")
+    """Create the owner and the MQTT integration; safe to run again."""
+    try:
+        status = http("GET", "/api/onboarding")
+    except SystemExit:  # the endpoint is gone once onboarding is complete
+        status = []
     assert isinstance(status, list)
     if any(s["step"] == "user" and not s["done"] for s in status):
         reply = http(
@@ -266,10 +273,14 @@ def onboard() -> None:
         ("analytics", {}),
         ("integration", {"client_id": CLIENT, "redirect_uri": CLIENT}),
     ):
-        if any(
-            s["step"] == step and not s["done"] for s in http("GET", "/api/onboarding")
-        ):  # type: ignore[union-attr]
+        if any(s["step"] == step and not s["done"] for s in status):
             http("POST", f"/api/onboarding/{step}", body, token)
+    entries = asyncio.run(ws_call([{"type": "config_entries/get", "domain": "mqtt"}]))[
+        0
+    ]
+    if entries.get("result"):
+        print("mqtt: already set up")
+        return
     flow = http(
         "POST",
         "/api/config/config_entries/flow",
