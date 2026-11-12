@@ -146,8 +146,12 @@ class AlertManager:
         """
         if self._device.error is not None:
             return False
-        if not (alert.get("image") or alert.get("thumb")):
+        keys = [k for k in ("image", "thumb") if alert.get(k)]
+        if not keys:
             return False
+        owned = self._device.publisher.owned
+        if all(f"alert/{alert['id']}/{k}" in owned for k in keys):
+            return False  # already held; a bitmap never changes once stored
         stored = await self._image_store(alert["id"]).async_load() or {}
         dropped = False
         for key in ("image", "thumb"):

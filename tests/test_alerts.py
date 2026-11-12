@@ -904,3 +904,23 @@ async def test_the_unread_count_follows_adds_and_acknowledgments(
     )
     await cmd(hass, mqtt_mock, {"req": "r", "ack": ids[1]})
     assert device.alerts.unread == 1
+
+
+async def test_a_refresh_does_not_reload_bitmaps_already_published(
+    hass: HomeAssistant, mqtt_mock: Any, device: Any, aioclient_mock: Any
+) -> None:
+    from homeassistant.helpers.storage import Store
+
+    aioclient_mock.get("http://cam.local/s.png", content=png("blue", (120, 90)))
+    (alert_id,) = (await send(hass, image_url="http://cam.local/s.png")).values()
+    assert topic_publishes(mqtt_mock, f"alert/{alert_id}/image")
+    load = Store.async_load
+    keys: list[str] = []
+
+    async def watched(self: Store[Any]) -> Any:
+        keys.append(self.key)
+        return await load(self)
+
+    with patch.object(Store, "async_load", watched):
+        await device.alerts.async_publish_all()
+    assert not [k for k in keys if k.endswith(f"alert_{alert_id}")]
