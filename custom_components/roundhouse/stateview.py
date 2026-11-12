@@ -164,9 +164,9 @@ def attributes(
             out["preset_modes"] = _pairs("preset_mode", get("preset_modes"), label)
     elif domain in ("number", "input_number"):
         try:
-            out["value"] = float(state) if state is not None else None
+            _put(out, "value", float(state) if state is not None else None)
         except (TypeError, ValueError):
-            out["value"] = None
+            pass  # `unavailable` or `unknown`: the key stays absent
         for key, src in (
             ("min", "min"),
             ("max", "max"),

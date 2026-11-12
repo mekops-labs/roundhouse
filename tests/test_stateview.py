@@ -132,7 +132,8 @@ def test_number_and_select() -> None:
         "unit": "min",
         "mode": "slider",
     }
-    assert sv.attributes("input_number", "x", {}, 0, label)["value"] is None
+    for state in ("x", "unavailable", "unknown"):
+        assert "value" not in sv.attributes("input_number", state, {}, 0, label)
     sel = sv.attributes("select", "a", {"options": ["a", "b"]}, 0, label)
     assert sel == {
         "option": pair("option", "a"),
