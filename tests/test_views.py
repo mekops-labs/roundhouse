@@ -18,7 +18,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.roundhouse import codec, layout, lovelace_io
+from custom_components.roundhouse import codec, issues, layout, lovelace_io
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 
 from .conftest import make_entry, vector
@@ -180,7 +180,9 @@ async def test_overflow_keeps_the_last_good_definition(
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     assert len(views_publishes(mqtt_mock)[-1]["views"][0]["tiles"]) == 3
 
-    issue = ir.async_get(hass).async_get_issue(DOMAIN, "overflow_tender01_home")
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, issues.overflow_issue_id("tender01", "home")
+    )
     assert issue is not None
     assert issue.translation_placeholders == {
         "device": "tender01",
@@ -188,17 +190,28 @@ async def test_overflow_keeps_the_last_good_definition(
         "excess": "3",
         "capacity": "15",
     }
-    assert "overflow_tender01_home" in notified
-    assert "remove 3 tile(s)" in notified["overflow_tender01_home"]["message"]
+    assert issues.overflow_issue_id("tender01", "home") in notified
+    assert (
+        "remove 3 tile(s)"
+        in notified[issues.overflow_issue_id("tender01", "home")]["message"]
+    )
     assert issue.translation_key == "view_overflow"
-    assert "keeps the last version" in notified["overflow_tender01_home"]["message"]
+    assert (
+        "keeps the last version"
+        in notified[issues.overflow_issue_id("tender01", "home")]["message"]
+    )
 
     await save(hass, config(("home", tiles(15))))  # fits again
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     assert len(views_publishes(mqtt_mock)[-1]["views"][0]["tiles"]) == 15
     assert views_publishes(mqtt_mock)[-1]["views"][0]["layout"] == 1
-    assert ir.async_get(hass).async_get_issue(DOMAIN, "overflow_tender01_home") is None
-    assert "overflow_tender01_home" not in notified
+    assert (
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, issues.overflow_issue_id("tender01", "home")
+        )
+        is None
+    )
+    assert issues.overflow_issue_id("tender01", "home") not in notified
 
 
 async def test_new_overflowing_view_does_not_appear(
@@ -212,11 +225,13 @@ async def test_new_overflowing_view_does_not_appear(
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     paths = [v["path"] for v in views_publishes(mqtt_mock)[-1]["views"]]
     assert paths == ["a"]
-    issue = ir.async_get(hass).async_get_issue(DOMAIN, "overflow_tender01_b")
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, issues.overflow_issue_id("tender01", "b")
+    )
     assert issue is not None
     # The view never fitted, so nothing claims the device keeps a version.
     assert issue.translation_key == "view_overflow_hidden"
-    message = notified["overflow_tender01_b"]["message"]
+    message = notified[issues.overflow_issue_id("tender01", "b")]["message"]
     assert "does not show this view" in message and "keeps" not in message
 
 
@@ -343,3 +358,16 @@ async def test_a_rename_in_the_registry_republishes_names(
     await hass.async_block_till_done()
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     assert views_publishes(mqtt_mock)[-1]["views"][0]["tiles"][0]["name"] == "New"
+
+
+def test_overflow_issue_ids_never_collide() -> None:
+    ids = {
+        issues.overflow_issue_id(device, path)
+        for device, path in (
+            ("a", "b-x"),
+            ("a_b", "x"),
+            ("a", "b_x"),
+            ("a-b", "x"),
+        )
+    }
+    assert len(ids) == 4

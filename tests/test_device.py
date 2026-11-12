@@ -279,24 +279,21 @@ async def test_removing_a_device_clears_its_topics_stores_and_issues(
     )
     await image.async_save({"format": "gray4"})
     issues.raise_dashboard_issue(hass, "tender01", "deleted")
-    ir.async_create_issue(
-        hass,
-        DOMAIN,
-        "overflow_tender01_home",
-        is_fixable=False,
-        severity=ir.IssueSeverity.ERROR,
-        translation_key="view_overflow",
-    )
-    # Another device whose ID starts with this one keeps its issue.
+    # The removed device's view `x-home` and another device `tender01_x`'s view
+    # `home` once shared one issue ID; the other device keeps its issue.
+    mine = issues.overflow_issue_id("tender01", "x-home")
+    theirs = issues.overflow_issue_id("tender01_x", "home")
+    assert mine != theirs
     make_entry(tender_profile, "tender01_x", "x").add_to_hass(hass)
-    ir.async_create_issue(
-        hass,
-        DOMAIN,
-        "overflow_tender01_x_home",
-        is_fixable=False,
-        severity=ir.IssueSeverity.ERROR,
-        translation_key="view_overflow",
-    )
+    for issue_id in (mine, theirs):
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="view_overflow",
+        )
     await hass.async_block_till_done()
     assert {k for k in hass_storage if k.startswith("roundhouse.tender01.")}
 
@@ -326,5 +323,5 @@ async def test_removing_a_device_clears_its_topics_stores_and_issues(
     assert not {k for k in hass_storage if k.startswith("roundhouse.tender01.")}
     registry = ir.async_get(hass)
     assert registry.async_get_issue(DOMAIN, "deleted_tender01") is None
-    assert registry.async_get_issue(DOMAIN, "overflow_tender01_home") is None
-    assert registry.async_get_issue(DOMAIN, "overflow_tender01_x_home") is not None
+    assert registry.async_get_issue(DOMAIN, mine) is None
+    assert registry.async_get_issue(DOMAIN, theirs) is not None

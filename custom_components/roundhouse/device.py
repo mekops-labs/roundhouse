@@ -34,9 +34,7 @@ DEFAULT_MAX_PAYLOAD = 65536
 STORE_VERSION = 1
 
 
-async def async_purge(
-    hass: HomeAssistant, device_id: str, other_ids: frozenset[str]
-) -> None:
+async def async_purge(hass: HomeAssistant, device_id: str) -> None:
     """Clear what a removed device leaves: retained topics, stores, and issues."""
     publisher = Publisher(hass, device_id, DEFAULT_MAX_PAYLOAD)
     try:
@@ -57,7 +55,7 @@ async def async_purge(
             hass, STORE_VERSION, store_key(device_id, name)
         )
         await store.async_remove()
-    issues.clear_device_issues(hass, device_id, other_ids)
+    issues.clear_device_issues(hass, device_id)
 
 
 class Device:
