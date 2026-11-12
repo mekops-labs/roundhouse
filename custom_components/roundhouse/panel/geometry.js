@@ -3,13 +3,22 @@
 const OVERFLOW_MARGIN = 48;
 const FALLBACK_GAP = 12;
 
+// The index of the layout with the most slots, the first on a tie.
+export function densest(profile) {
+  let best = 0;
+  profile.layouts.forEach((layout, i) => {
+    if (layout.slots.length > profile.layouts[best].slots.length) best = i;
+  });
+  return best;
+}
+
 export function capacity(profile) {
-  return profile.layouts[profile.layouts.length - 1].slots.length;
+  return profile.layouts[densest(profile)].slots.length;
 }
 
 // The layout a view is drawn in: its chosen one, or the densest when it overflows.
 export function layoutIndex(profile, view) {
-  return view.layout ?? profile.layouts.length - 1;
+  return view.layout ?? densest(profile);
 }
 
 function toRect([x, y, w, h]) {

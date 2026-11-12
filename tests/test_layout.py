@@ -24,7 +24,17 @@ def profile(request: pytest.FixtureRequest) -> dict[str, Any]:
 
 
 def test_capacity_is_the_densest_layout(profile: dict[str, Any]) -> None:
-    assert lo.capacity(profile) == len(profile["layouts"][-1]["slots"])
+    assert lo.capacity(profile) == max(len(x["slots"]) for x in profile["layouts"])
+
+
+def test_the_densest_layout_need_not_come_last(profile: dict[str, Any]) -> None:
+    flipped = {**profile, "layouts": profile["layouts"][::-1]}
+    most = max(len(x["slots"]) for x in profile["layouts"])
+    assert lo.densest(flipped) == 0
+    assert lo.capacity(flipped) == most
+    published, overflows = lo.merge([view("home", most)], {}, flipped)
+    assert not overflows
+    assert published[0]["layout"] == 0
 
 
 def test_tender_capacities() -> None:

@@ -20,6 +20,13 @@ test("capacity is the densest layout", () => {
   assert.equal(capacity(wall), 8);
 });
 
+test("the densest layout need not come last", () => {
+  const flipped = { ...tender, layouts: [...tender.layouts].reverse() };
+  assert.equal(capacity(flipped), 15);
+  assert.equal(layoutIndex(flipped, view(20, null)), 0);
+  assert.equal(overflowCount(flipped, view(10, 0)), 0);
+});
+
 test("a view is drawn in its layout, or the densest one when it overflows", () => {
   assert.equal(layoutIndex(tender, view(3, 0)), 0);
   assert.equal(layoutIndex(tender, view(3, 1)), 1);

@@ -33,6 +33,13 @@ Pack an 8-bit color with `((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)`.
 A rectangle is `[x, y, width, height]` in pixels, with the origin at the top
 left of the display. Width and height are at least 1.
 
+## Layouts
+
+`layouts` may be announced in any order. Roundhouse gives a view the first
+layout, in announced order, with a slot for each tile. A view fits when the
+layout with the most slots holds all of its tiles; the first such layout counts
+when several have the same number of slots.
+
 ## Closed and open values
 
 Closed sets: `kind` (`toggle`, `activate`, `readonly`), `severity`

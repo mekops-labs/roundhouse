@@ -32,9 +32,15 @@ class Overflow:
         return self.tiles - self.capacity
 
 
+def densest(profile: Mapping[str, Any]) -> int:
+    """Return the index of the layout with the most slots, the first on a tie."""
+    layouts = profile["layouts"]
+    return max(range(len(layouts)), key=lambda i: len(layouts[i]["slots"]))
+
+
 def capacity(profile: Mapping[str, Any]) -> int:
-    """Return the slot count of the densest (last) layout."""
-    return len(profile["layouts"][-1]["slots"])
+    """Return the slot count of the densest layout."""
+    return len(profile["layouts"][densest(profile)]["slots"])
 
 
 def choose_layout(profile: Mapping[str, Any], tiles: int) -> int | None:
