@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Coroutine
 from datetime import datetime
 from typing import Any
@@ -24,6 +25,7 @@ class Debounce:
         self._wait = wait
         self._action = action
         self._cancel: CALLBACK_TYPE | None = None
+        self._running: set[asyncio.Task[None]] = set()
 
     @callback
     def trigger(self) -> None:
@@ -39,6 +41,15 @@ class Debounce:
             self._cancel = None
 
     @callback
+    def async_stop(self) -> None:
+        """Drop a pending run and cancel the runs in progress."""
+        self.cancel()
+        for task in list(self._running):
+            task.cancel()
+
+    @callback
     def _fire(self, _now: datetime) -> None:
         self._cancel = None
-        self._hass.async_create_task(self._action())
+        task = self._hass.async_create_task(self._action())
+        self._running.add(task)
+        task.add_done_callback(self._running.discard)

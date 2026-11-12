@@ -49,6 +49,7 @@ class Publisher:
         self._unsent: set[str] = set()  # owned topics whose last send failed
         self._unsent_clear: set[str] = set()  # topics whose clearing failed
         self._retry: CALLBACK_TYPE | None = None
+        self._closed = False
 
     @property
     def owned(self) -> frozenset[str]:
@@ -69,8 +70,11 @@ class Publisher:
         """Publish a retained payload unless it is unchanged; return True if sent.
 
         A failed send is not an error: the payload stays the desired value of the
-        topic, and it is sent again on a timer and after a reconnect.
+        topic, and it is sent again on a timer and after a reconnect. A stopped
+        publisher sends nothing.
         """
+        if self._closed:
+            return False
         if len(payload) > self.max_payload:
             raise PayloadTooLargeError(
                 f"{self._prefix}{subtopic}: {len(payload)} > {self.max_payload}"
@@ -82,9 +86,13 @@ class Publisher:
         return await self._try_send(subtopic, payload)
 
     async def _try_send(self, subtopic: str, payload: bytes) -> bool:
+        if self._closed:
+            return False
         try:
             await self._send(subtopic, payload)
         except (HomeAssistantError, TimeoutError) as err:
+            if self._closed:  # stopped while the send was in flight
+                return False
             _LOGGER.warning(
                 "Not sent, will retry: %s%s (%s)",
                 self._prefix,
@@ -98,7 +106,7 @@ class Publisher:
         return True
 
     def _arm_retry(self) -> None:
-        if self._retry is None:
+        if self._retry is None and not self._closed:
             self._retry = async_call_later(self._hass, RETRY_SECONDS, self._on_retry)
 
     async def _on_retry(self, _now: datetime) -> None:
@@ -117,7 +125,8 @@ class Publisher:
 
     @callback
     def async_stop(self) -> None:
-        """Cancel the retry timer."""
+        """Stop sending for good and cancel the retry timer."""
+        self._closed = True
         if self._retry is not None:
             self._retry()
             self._retry = None
@@ -144,9 +153,13 @@ class Publisher:
             await self._try_clear(subtopic)
 
     async def _try_clear(self, subtopic: str) -> None:
+        if self._closed:
+            return
         try:
             await self._send(subtopic, b"")
         except (HomeAssistantError, TimeoutError) as err:
+            if self._closed:
+                return
             _LOGGER.warning(
                 "Not cleared, will retry: %s%s (%s)",
                 self._prefix,

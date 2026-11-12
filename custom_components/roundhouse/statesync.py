@@ -38,6 +38,7 @@ class StateSync:
         self._entity_icon: dict[str, str] = {}
         self._unsubs: list[CALLBACK_TYPE] = []
         self._lock = asyncio.Lock()
+        self._tasks: set[asyncio.Task[None]] = set()
 
     @property
     def translator(self) -> rendering.Translator:
@@ -46,8 +47,10 @@ class StateSync:
 
     @callback
     def async_stop(self) -> None:
-        """Stop tracking."""
+        """Stop tracking and cancel the publishes in progress."""
         self._drop_listeners()
+        for task in list(self._tasks):
+            task.cancel()
 
     def _drop_listeners(self) -> None:
         while self._unsubs:
@@ -81,13 +84,19 @@ class StateSync:
 
     @callback
     def _on_state(self, event: Event[EventStateChangedData]) -> None:
-        self._hass.async_create_task(self._publish_locked(event.data["entity_id"]))
+        self._spawn(event.data["entity_id"])
 
     @callback
     def _on_registry(self, event: Event[er.EventEntityRegistryUpdatedData]) -> None:
         entity_id = event.data.get("entity_id")
         if entity_id in self._entities:
-            self._hass.async_create_task(self._publish_locked(entity_id))
+            self._spawn(entity_id)
+
+    @callback
+    def _spawn(self, entity_id: str) -> None:
+        task = self._hass.async_create_task(self._publish_locked(entity_id))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     async def _publish_locked(self, entity_id: str) -> None:
         async with self._lock:

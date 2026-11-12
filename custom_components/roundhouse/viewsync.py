@@ -38,6 +38,7 @@ class ViewSync:
         self._lock = asyncio.Lock()
         self._debounce = Debounce(hass, lovelace_io.UPDATE_WAIT, self.async_refresh)
         self._unsubs: list[CALLBACK_TYPE] = []
+        self._stopped = False
         self.last_digest: digest.DigestResult | None = None
         self.last_overflows: list[layout.Overflow] = []
         # `config`, `strategy`, or `missing`; None before the first digest.
@@ -65,8 +66,9 @@ class ViewSync:
 
     @callback
     def async_stop(self) -> None:
-        """Stop watching."""
-        self._debounce.cancel()
+        """Stop watching and cancel a refresh in progress."""
+        self._stopped = True
+        self._debounce.async_stop()
         while self._unsubs:
             self._unsubs.pop()()
 
@@ -86,7 +88,7 @@ class ViewSync:
         """Digest the dashboard again and publish what changed."""
         async with self._lock:
             device = self._device
-            if device.profile is None:
+            if self._stopped or device.profile is None:
                 return
             try:
                 await self._refresh(device.profile)
@@ -131,6 +133,8 @@ class ViewSync:
             card_icons,
             result.skipped,
         )
+        if self._stopped:  # a newer runtime owns the store now
+            return
         await self._store.async_save(
             {
                 "fingerprint": layout.profile_fingerprint(profile),
