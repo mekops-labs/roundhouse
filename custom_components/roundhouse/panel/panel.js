@@ -36,7 +36,15 @@ class RoundhousePanel extends HTMLElement {
     this._generation = 0; // bumped by _stop; a subscription from an older one is dropped
     this._frame = 0;
     this._error = null;
-    this.attachShadow({ mode: "open" });
+    const root = this.attachShadow({ mode: "open" });
+    // The header is built once per device list, so a state frame never resets an
+    // open device picker; each render replaces only the body.
+    const style = document.createElement("style");
+    style.textContent = STYLE;
+    this._headerEl = document.createElement("header");
+    this._body = document.createElement("div");
+    root.append(style, this._headerEl, this._body);
+    this._renderHeader();
   }
 
   set hass(hass) {
@@ -63,6 +71,7 @@ class RoundhousePanel extends HTMLElement {
     try {
       this._devices = await this._hass.callWS({ type: "roundhouse/preview/devices" });
       this._deviceId = this._devices[0]?.device_id ?? null;
+      this._renderHeader();
       this._render();
       if (this._deviceId && this.isConnected) await this._subscribe();
     } catch (err) {
@@ -117,25 +126,15 @@ class RoundhousePanel extends HTMLElement {
   }
 
   _render() {
-    const root = this.shadowRoot;
-    root.replaceChildren();
-    const style = document.createElement("style");
-    style.textContent = STYLE;
-    root.append(style, this._header());
-    if (this._error) {
-      root.append(this._text("p", `Cannot show the preview: ${this._error}`, "error"));
-      return;
-    }
-    if (!this._devices.length) {
-      root.append(this._text("p", "No Roundhouse device is set up yet.", "note"));
-      return;
-    }
+    this._body.replaceChildren(this._content());
+  }
+
+  _content() {
+    if (this._error) return this._text("p", `Cannot show the preview: ${this._error}`, "error");
+    if (!this._devices.length) return this._text("p", "No Roundhouse device is set up yet.", "note");
     const snapshot = this._model.snapshot;
-    if (!snapshot) {
-      root.append(this._text("p", "Loading…", "note"));
-      return;
-    }
-    root.append(this._views(snapshot));
+    if (!snapshot) return this._text("p", "Loading…", "note");
+    return this._views(snapshot);
   }
 
   _text(tag, text, cls) {
@@ -145,9 +144,9 @@ class RoundhousePanel extends HTMLElement {
     return el;
   }
 
-  _header() {
-    const header = document.createElement("header");
-    header.append(this._text("h1", "Roundhouse"));
+  _renderHeader() {
+    const header = this._headerEl;
+    header.replaceChildren(this._text("h1", "Roundhouse"));
     if (this._devices.length > 1) {
       const select = document.createElement("select");
       for (const device of this._devices) {
@@ -163,7 +162,6 @@ class RoundhousePanel extends HTMLElement {
       });
       header.append(select);
     }
-    return header;
   }
 
   _views(snapshot) {

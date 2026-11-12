@@ -112,3 +112,16 @@ test("a subscription still pending when the panel detaches is closed", async () 
   await tick();
   assert.equal(conn.subs[0].closed, true);
 });
+
+test("a state frame keeps the device picker", async () => {
+  const { el, conn } = await panel([{ device_id: "a" }, { device_id: "b" }]);
+  conn.subs[0].resolve();
+  await tick();
+  const [, header] = el.shadowRoot.children;
+  const picker = header.children[1];
+  assert.equal(picker.tagName, "select");
+  el._render(); // what each animation frame does after a state message
+  el._render();
+  assert.equal(el.shadowRoot.children[1], header);
+  assert.equal(header.children[1], picker);
+});
