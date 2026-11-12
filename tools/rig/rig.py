@@ -478,7 +478,8 @@ def screenshot(
         "bash",
         "-c",
         f"pip install -q --break-system-packages playwright=={version} 2>&1 | tail -1;"
-        f" python3 /tools/shot.py --out /rig/{out.name} --wait {wait} --after {after}"
+        f" python3 /tools/shot.py --base {BASE} --out /rig/{out.name}"
+        f" --wait {wait} --after {after}"
         + (f" --poke '{poke}'" if poke else "")
         + (f" --device {device}" if device else ""),
         check=False,
