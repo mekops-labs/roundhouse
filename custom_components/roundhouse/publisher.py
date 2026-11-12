@@ -56,6 +56,11 @@ class Publisher:
         """The subtopics currently held retained."""
         return frozenset(self._published)
 
+    @property
+    def pending_clears(self) -> frozenset[str]:
+        """The subtopics whose clearing failed and is still to be retried."""
+        return frozenset(self._unsent_clear)
+
     async def _send(self, subtopic: str, payload: bytes) -> None:
         await mqtt.async_publish(
             self._hass,

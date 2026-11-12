@@ -10,9 +10,10 @@ from homeassistant.helpers.typing import ConfigType
 
 from . import preview, services
 from .const import CONF_DEVICE_ID, DOMAIN
-from .device import Device, async_purge
+from .device import Device
 from .deviceinfo import device_info
 from .panelreg import async_register_panel
+from .purge import async_cancel, async_purge
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["binary_sensor", "device_tracker", "notify", "sensor"]
@@ -28,6 +29,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a Roundhouse device entry."""
+    async_cancel(hass, entry.data[CONF_DEVICE_ID])  # a removed device added again
     device = Device(hass, entry)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = device
     # Home Assistant also updates an entry for discovery keys; reload only
