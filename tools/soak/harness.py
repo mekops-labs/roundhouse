@@ -29,7 +29,6 @@ import rig  # noqa: E402
 _REFRESH = rig.access  # the rig's own token refresh, before Ha replaces it
 
 PROFILES = {"tender": "tender", "wall": "wall-panel"}
-PASSWORDS = rig.USERS
 IMAGE_PORT = 18899
 IMAGE_URL = f"http://host.containers.internal:{IMAGE_PORT}/snap.png"
 LAMPS = [f"input_boolean.lamp{i}" for i in range(1, 7)]
@@ -143,7 +142,7 @@ class Double:
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2, client_id=f"double-{device_id}"
         )
-        self.client.username_pw_set(device_id, PASSWORDS[device_id])
+        self.client.username_pw_set(device_id, rig.credentials()[device_id])
         self.client.will_set(
             f"{self.prefix}/availability", "offline", qos=1, retain=True
         )

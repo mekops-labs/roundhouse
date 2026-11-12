@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -37,12 +38,8 @@ MQTT_PORT = int(os.environ.get("RIG_MQTT_PORT", 18830))
 HA_NAME, MQTT_NAME = f"{PREFIX}-ha", f"{PREFIX}-mqtt"
 # With RIG_ACL=1 the broker needs a login and applies the documented ACL.
 ACL = os.environ.get("RIG_ACL") == "1"
-USERS = {
-    "homeassistant": "redacted",
-    "tender01": "redacted",
-    "tender02": "redacted",
-    "wall01": "redacted",
-}
+# Broker logins; `credentials()` generates their passwords.
+BROKER_USERS = ("homeassistant", "tender01", "tender02", "wall01")
 BASE = f"http://127.0.0.1:{HA_PORT}"
 CLIENT = f"{BASE}/"
 HA_IMAGE = "ghcr.io/home-assistant/home-assistant:stable"
@@ -50,7 +47,25 @@ MQTT_IMAGE = "docker.io/library/eclipse-mosquitto:2"
 NET = f"{PREFIX}dev"
 # The Playwright container image and the matching Python package.
 PLAYWRIGHT = "1.64.1"
-OWNER = {"name": "Rig", "username": "rig", "password": "redacted"}
+OWNER = {"name": "Rig", "username": "rig"}
+
+
+def credentials() -> dict[str, str]:
+    """Return the rig's passwords, generated once into RIG/credentials.json.
+
+    Keys are the broker users and `owner`, the Home Assistant owner.
+    """
+    path = RIG / "credentials.json"
+    stored = json.loads(path.read_text()) if path.exists() else {}
+    wanted = [*BROKER_USERS, "owner"]
+    if any(name not in stored for name in wanted):
+        for name in wanted:
+            stored.setdefault(name, secrets.token_urlsafe(16))
+        RIG.mkdir(parents=True, exist_ok=True)
+        path.touch(mode=0o600)
+        path.write_text(json.dumps(stored, indent=2) + "\n")
+    return {name: str(stored[name]) for name in wanted}
+
 
 CONFIGURATION = """\
 default_config:
@@ -107,9 +122,10 @@ def up(language: str) -> None:
     )
     if ACL:
         (RIG / "mosquitto/config/acl").write_text(ACL_FILE)
+        passwords = credentials()
         commands = [
-            f"mosquitto_passwd -b {'-c ' if i == 0 else ''}/mosquitto/config/passwd {user} {password}"
-            for i, (user, password) in enumerate(USERS.items())
+            f"mosquitto_passwd -b {'-c ' if i == 0 else ''}/mosquitto/config/passwd {user} {passwords[user]}"
+            for i, user in enumerate(BROKER_USERS)
         ]
         podman(
             "run",
@@ -252,7 +268,12 @@ def onboard() -> None:
         reply = http(
             "POST",
             "/api/onboarding/users",
-            {"client_id": CLIENT, "language": "en", **OWNER},
+            {
+                "client_id": CLIENT,
+                "language": "en",
+                **OWNER,
+                "password": credentials()["owner"],
+            },
         )
         assert isinstance(reply, dict)
         auth = http(
@@ -297,7 +318,10 @@ def onboard() -> None:
                 "port": 1883,
                 "protocol": "5",
                 **(
-                    {"username": "homeassistant", "password": USERS["homeassistant"]}
+                    {
+                        "username": "homeassistant",
+                        "password": credentials()["homeassistant"],
+                    }
                     if ACL
                     else {}
                 ),
