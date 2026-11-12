@@ -431,3 +431,36 @@ async def test_the_preview_follows_the_device_through_a_reload(
         if snap["type"] == "snapshot":
             counts.append(len(snap["views"][0]["tiles"]))
     await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_a_snapshot_that_finishes_late_is_not_sent(
+    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+) -> None:
+    from unittest.mock import patch
+
+    from custom_components.roundhouse import preview
+
+    await setup(hass, tender_profile, config(("home", [])))
+    gate, entered = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def build(_hass: HomeAssistant, _device: Any) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        n = calls
+        if n == 1:  # the older snapshot renders slowly
+            entered.set()
+            await gate.wait()
+        return {"type": "snapshot", "views": [], "n": n}
+
+    sent: list[dict[str, Any]] = []
+    sub = preview.Subscription(hass, "tender01", sent.append)
+    with patch.object(preview, "build_snapshot", build):
+        older = hass.async_create_task(sub._push_snapshot())
+        async with asyncio.timeout(5):
+            await entered.wait()
+        await sub._push_snapshot()
+        gate.set()
+        await older
+    assert [m["n"] for m in sent] == [2]
+    await advance(hass, STALE_SETTLE_SECONDS + 1)

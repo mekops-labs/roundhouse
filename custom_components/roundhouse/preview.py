@@ -131,6 +131,9 @@ class Subscription:
         self._cards: dict[str, str | None] = {}
         self._closed = False
         self._state_unsub: CALLBACK_TYPE | None = None
+        # Renders finish out of order; only the latest one started is sent.
+        self._snapshot_seq = 0
+        self._state_seq: dict[str, int] = {}
 
     def _device(self) -> Device | None:
         """Return the running device; a reload replaces the object."""
@@ -160,8 +163,10 @@ class Subscription:
         device = self._device()
         if self._closed or device is None or device.profile is None:
             return
+        self._snapshot_seq += 1
+        seq = self._snapshot_seq
         snapshot = await build_snapshot(self._hass, device)
-        if self._closed:
+        if self._closed or seq != self._snapshot_seq:
             return
         self._send(snapshot)
         self._track(device, snapshot)
@@ -179,6 +184,7 @@ class Subscription:
         if entities == self._tracked:
             return
         self._tracked = entities
+        self._state_seq = {e: n for e, n in self._state_seq.items() if e in entities}
         if self._state_unsub is not None:
             self._state_unsub()
             self._unsubs.remove(self._state_unsub)
@@ -195,10 +201,11 @@ class Subscription:
         device = self._device()
         if self._closed or device is None or entity_id not in self._tracked:
             return
+        seq = self._state_seq[entity_id] = self._state_seq.get(entity_id, 0) + 1
         states, icons = await render_states(
             self._hass, device, {entity_id: self._cards.get(entity_id)}
         )
-        if not self._closed:
+        if not self._closed and seq == self._state_seq.get(entity_id):
             self._send(
                 {
                     "type": "state",
