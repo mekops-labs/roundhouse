@@ -6,12 +6,12 @@ of those entities, and alerts. Devices draw their own pixels; Roundhouse reads
 Lovelace, formats state, rasterizes icons, and scales images for each device's
 announced screen.
 
-Status: under development. No release yet.
+Status: early release. `CHANGELOG.md` lists the current version.
 
 ## Install
 
-See `docs/install.md`: HACS, the MQTT birth message, per-device broker logins, and
-the broker ACL that is the security control.
+See `docs/install.md`: the Marketplace or HACS, the MQTT birth message,
+per-device broker logins, and the broker ACL that is the security control.
 
 ## Requirements
 

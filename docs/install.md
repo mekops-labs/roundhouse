@@ -3,17 +3,33 @@
 Roundhouse needs Home Assistant (the current stable release or the one before
 it) with the MQTT integration set up and its birth message enabled.
 
-## Install with HACS
+## Install on Home Assistant 2026.11 or newer
+
+Home Assistant 2026.11 and newer install community integrations through the
+built-in Marketplace.
+
+1. Go to **Settings** > **Marketplace**.
+2. Select **Add from link**.
+3. Enter `https://github.com/mekops-labs/roundhouse` and select **Add**.
+4. If the Marketplace asks you to connect GitHub, connect it.
+5. If the Marketplace asks for the type, select **Integration** and select
+   **Add** again.
+6. Install **Roundhouse** and restart Home Assistant.
+
+## Install on Home Assistant 2026.10 or older
 
 1. In HACS, open the menu, choose **Custom repositories**, and add
    `https://github.com/mekops-labs/roundhouse` as an **Integration**.
 2. Download **Roundhouse** and restart Home Assistant.
-3. Power on a panel. Home Assistant shows **Discovered: Roundhouse** under
-   Settings, Devices & services. Confirm it and choose the URL path of the
-   panel's dashboard (for example `tender-panel`). Roundhouse creates the
-   dashboard with a starter view, or uses the one that exists, and never
-   overwrites it.
-4. Edit the dashboard. The **Roundhouse** sidebar entry (administrators only)
+
+## Set up a panel
+
+1. Power on a panel. Home Assistant shows **Discovered: Roundhouse** under
+   Settings, Devices & services.
+2. Confirm it and choose the URL path of the panel's dashboard (for example
+   `tender-panel`). Roundhouse creates the dashboard with a starter view, or
+   uses the one that exists, and never overwrites it.
+3. Edit the dashboard. The **Roundhouse** sidebar entry (administrators only)
    shows each view as the panel will draw it.
 
 To install by hand, copy `custom_components/roundhouse` into the `config`
