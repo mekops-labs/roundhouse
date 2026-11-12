@@ -1,4 +1,4 @@
-// The Roundhouse sidebar panel: each view of a device drawn as the device will draw it.
+// The Roundhouse sidebar panel: each view drawn as the device will draw it.
 
 import { drawView } from "./draw.js";
 import { fitScale, frameHeight, overflowCount } from "./geometry.js";
@@ -37,8 +37,8 @@ class RoundhousePanel extends HTMLElement {
     this._frame = 0;
     this._error = null;
     const root = this.attachShadow({ mode: "open" });
-    // The header is built once per device list, so a state frame never resets an
-    // open device picker; each render replaces only the body.
+    // The header is built once per device list, so a state frame never resets
+    // an open device picker; each render replaces only the body.
     const style = document.createElement("style");
     style.textContent = STYLE;
     this._headerEl = document.createElement("header");

@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
 _DATA = "roundhouse_purges"
 
-# A clear that failed, or ran while the broker was away, is tried again this often.
+# A clear that failed, or ran while the broker was away, is retried this often.
 RETRY_SECONDS = 60.0
 
 

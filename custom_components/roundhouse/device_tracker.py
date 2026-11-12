@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-# The classes moved between modules; the package re-exports them on every release.
+# The classes moved between modules; the package re-exports them in every
+# release.
 from homeassistant.components.device_tracker import (  # type: ignore[attr-defined]
     SourceType,
     TrackerEntity,

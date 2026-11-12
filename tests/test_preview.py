@@ -102,7 +102,7 @@ async def test_a_save_pushes_a_new_snapshot_within_the_budget(
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     snap = await event(client)
     assert len(snap["views"][0]["tiles"]) == 3
-    # The 2 s wait of the digest is fake time here; the rest takes no time at all.
+    # The 2 s wait of the digest is fake time here; the rest takes no time.
     assert (
         time.perf_counter() - started < 1
     )  # the whole path is far inside its 3 s budget
@@ -125,8 +125,8 @@ async def test_an_overflowing_view_is_included_and_marked(
     await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     snap = await event(client)
     home, new = snap["views"]
-    # Both overflow; neither is published as digested, but "home" still shows its
-    # last good definition on the device.
+    # Both overflow; neither is published as digested, but "home" still shows
+    # its last good definition on the device.
     assert (home["overflow"], home["count"], home["capacity"], home["layout"]) == (
         True,
         18,
@@ -339,7 +339,7 @@ async def test_the_preview_does_not_publish_anything_to_the_broker(
     assert layout.capacity(tender_profile) == 15
 
 
-# --- registration ------------------------------------------------------------------
+# --- registration -------------------------------------------------------------
 
 
 async def test_the_panel_is_registered_as_an_admin_only_custom_panel(

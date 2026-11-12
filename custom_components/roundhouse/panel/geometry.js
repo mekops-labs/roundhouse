@@ -16,7 +16,7 @@ export function capacity(profile) {
   return profile.layouts[densest(profile)].slots.length;
 }
 
-// The layout a view is drawn in: its chosen one, or the densest when it overflows.
+// The layout a view is drawn in: its own, or the densest when it overflows.
 export function layoutIndex(profile, view) {
   return view.layout ?? densest(profile);
 }
@@ -33,8 +33,8 @@ function pitches(layout) {
   return { colPitch, rowPitch };
 }
 
-// The rectangle of tile `i`. Tiles past the last slot continue the grid in a strip
-// below the screen, so the excess is visible without overlapping the chrome.
+// The rectangle of tile `i`. Tiles past the last slot continue the grid in a
+// strip below the screen, so the excess shows without covering the chrome.
 export function tileRect(profile, index, i) {
   const layout = profile.layouts[index];
   if (i < layout.slots.length) return toRect(layout.slots[i]);

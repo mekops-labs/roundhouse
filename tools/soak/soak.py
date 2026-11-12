@@ -33,7 +33,7 @@ COMMAND_DEADLINE = 15.0
 VIEWS_DEADLINE = 8.0
 ALERT_DEADLINE = 10.0
 RESYNC_DEADLINE = 60.0
-# After a restart an update waits for Home Assistant's own MQTT reconnect, then arrives.
+# After a restart an update waits for Home Assistant's own MQTT reconnect.
 OUTAGE_GRACE = 30.0
 OUTAGE_DEADLINE = 25.0
 
@@ -89,7 +89,7 @@ class Soak:
         """Whether the entity is on a published view of the device."""
         return entity_id in self.tiles[double.device_id]
 
-    # --- steps ---------------------------------------------------------------------
+    # --- steps ---------------------------------------------------------------
 
     def ha_change(self) -> None:
         """Change an entity in Home Assistant; every device showing it must see it."""
@@ -275,7 +275,7 @@ class Soak:
         else:
             self.latency["ack"].append(read[0] - acked)
 
-    # --- restarts -----------------------------------------------------------------
+    # --- restarts ------------------------------------------------------------
 
     def resync_complete(self, started: float) -> float | None:
         """Wait until every device has seen meta, views, and every tile's state again."""
@@ -330,7 +330,7 @@ class Soak:
         if took is not None:
             self.latency["broker_resync"].append(took)
         for double in self.doubles:
-            # The ACL makes a device's own availability write-only, so ask Home Assistant.
+            # A device's availability is write-only under the ACL: ask HA.
             end = now() + 30
             while now() < end and self.ha.presence(double.device_id) != "home":
                 time.sleep(1)
@@ -345,7 +345,7 @@ class Soak:
             flush=True,
         )
 
-    # --- checks -------------------------------------------------------------------
+    # --- checks --------------------------------------------------------------
 
     def expected_text(self, entity_id: str) -> str:
         state = self.ha.state(entity_id)["state"]
@@ -404,7 +404,7 @@ class Soak:
             print("LOG:", line[:200])
         return {"blocking_calls": blocking, "roundhouse_errors": len(errors)}
 
-    # --- the run ------------------------------------------------------------------
+    # --- the run -------------------------------------------------------------
 
     def run(
         self,

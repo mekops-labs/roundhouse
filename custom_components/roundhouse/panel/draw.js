@@ -121,8 +121,8 @@ function drawChrome(ctx, profile, snapshot, current) {
   });
 }
 
-// Draw one view at the device's own resolution. `deps.drawIcon(ctx, rgba, size, x, y)`
-// puts a tinted mask on the canvas. Returns the height of the drawing.
+// Draw one view at the device's own resolution. `deps.drawIcon(ctx, rgba,
+// size, x, y)` puts a tinted mask on the canvas. Return the drawing's height.
 export function drawView(ctx, profile, model, view, deps) {
   const snapshot = model.snapshot;
   const height = frameHeight(profile, view);

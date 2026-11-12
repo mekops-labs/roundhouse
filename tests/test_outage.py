@@ -62,7 +62,7 @@ async def test_an_update_during_an_outage_is_sent_when_the_broker_returns(
     mqtt_mock.async_publish.reset_mock()  # forget the failed attempts
 
     await come_back(hass, mqtt_mock)
-    # The reconnect sends the new value, not the one published before the outage.
+    # The reconnect sends the new value, not the one from before the outage.
     assert texts(mqtt_mock, "state/light.l0") == ["Off"]
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 

@@ -31,7 +31,8 @@ import aiohttp
 
 REPO = Path(__file__).resolve().parents[2]
 RIG = Path(os.environ.get("RIG_DIR", Path.home() / ".cache/roundhouse-dev/rig"))
-# A second instance (the soak) runs beside the first with another prefix and ports.
+# A second instance (the soak) runs beside the first, with its own prefix and
+# ports.
 PREFIX = os.environ.get("RIG_PREFIX", "rh")
 HA_PORT = int(os.environ.get("RIG_HA_PORT", 18123))
 MQTT_PORT = int(os.environ.get("RIG_MQTT_PORT", 18830))
@@ -99,7 +100,8 @@ MOSQUITTO_ACL = (
     "listener 1883\nallow_anonymous false\npassword_file /mosquitto/config/passwd\n"
     "acl_file /mosquitto/config/acl\npersistence true\npersistence_location /mosquitto/data/\n"
 )
-# The ACL of docs/install.md: each device is a broker user named after its device ID.
+# The ACL of docs/install.md: each device is a broker user named after its
+# device ID.
 ACL_FILE = (
     (REPO / "docs" / "mosquitto-acl.example").read_text()
     if (REPO / "docs" / "mosquitto-acl.example").exists()

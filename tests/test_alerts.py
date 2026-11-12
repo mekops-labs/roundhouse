@@ -846,7 +846,7 @@ async def test_a_snapshot_done_just_after_the_wait_is_not_overwritten(
 
     entry = make_entry(tender_profile)
     entry.add_to_hass(hass)
-    # One alert held: each new one ages the old one out, so the records are copies.
+    # One alert held: each new one ages the old out, so the records are copies.
     hass.config_entries.async_update_entry(entry, options={"alert_max_count": 1})
     await setup(hass, tender_profile, config(("home", [])), entry=entry)
     await send(hass)

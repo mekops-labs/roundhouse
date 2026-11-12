@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 # A send that failed (the broker is away) is tried again this often.
 RETRY_SECONDS = 5.0
 
-# Topics Roundhouse publishes; the device owns every other topic under its prefix.
+# Topics Roundhouse publishes; the device owns every other topic under it.
 _OWNED_PREFIXES = ("meta", "views", "state/", "icon/", "alert/")
 
 
@@ -43,8 +43,8 @@ class Publisher:
         self._hass = hass
         self._prefix = f"roundhouse/{device_id}/"
         self.max_payload = max_payload
-        # What each owned topic should hold. It is recorded before the send, so a
-        # failed send never leaves an older value to be republished later.
+        # What each owned topic should hold. It is recorded before the send, so
+        # a failed send never leaves an older value to be republished later.
         self._published: dict[str, bytes] = {}
         self._unsent: set[str] = set()  # owned topics whose last send failed
         self._unsent_clear: set[str] = set()  # topics whose clearing failed

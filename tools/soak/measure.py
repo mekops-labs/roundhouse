@@ -65,7 +65,7 @@ def measure(ha: Ha, doubles: list[harness.Double], quick: bool) -> dict[str, Any
             out["command_to_result"].append(took)
         time.sleep(0.05)
 
-    # Dashboard save to the view definition on the device (includes the 2 s wait).
+    # Dashboard save to view definition on the device, with the 2 s wait.
     slug = DEVICES[0][2]
     for i in range(n_save):
         chosen = [POOL[(i + j) % len(POOL)] for j in range(3 + i % 5)]

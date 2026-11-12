@@ -60,7 +60,7 @@ async def tender(
     return entry
 
 
-# --- entities ----------------------------------------------------------------
+# --- entities -----------------------------------------------------------------
 
 
 async def test_a_battery_device_gets_every_entity(
@@ -239,7 +239,7 @@ async def test_all_entities_belong_to_the_one_device(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
-# --- presence ------------------------------------------------------------------
+# --- presence -----------------------------------------------------------------
 
 
 def tracker(hass: HomeAssistant) -> Any:
