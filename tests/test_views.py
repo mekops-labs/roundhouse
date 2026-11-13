@@ -206,7 +206,7 @@ async def test_a_view_the_profile_cannot_show_is_left_out_with_an_issue(
         "big",
     ]
 
-    # The wall panel's layouts hold 6 and 8: "big" (layout 1, 14 tiles) cannot fit.
+    # The wall panel's layouts hold 6 and 8: "big" (14 tiles) cannot fit.
     wall = vector("announce", "wall-panel")["payload"]
     hass.config_entries.async_update_entry(entry, data={**entry.data, "profile": wall})
     await hass.async_block_till_done()

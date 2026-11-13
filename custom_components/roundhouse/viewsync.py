@@ -50,7 +50,7 @@ class SaveResult:
     views: list[dict[str, Any]] = field(default_factory=list)
     conflict: bool = False
     errors: list[viewrules.RuleError] = field(default_factory=list)
-    # The runtime stopped (the entry reloads); the caller retries on the new one.
+    # The runtime stopped as the entry reloads; the caller retries on the new.
     stopped: bool = False
 
     @property

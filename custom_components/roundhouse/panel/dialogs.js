@@ -1,5 +1,5 @@
-// The tile dialog and the view dialog, as native `<dialog>` elements styled like
-// Home Assistant's own dialogs.
+// The tile dialog and the view dialog: native `<dialog>` elements styled
+// like Home Assistant's own dialogs.
 
 import { drawTile } from "./draw.js";
 import { h } from "./dom.js";
@@ -69,8 +69,8 @@ function open(ctx, title, body, actions) {
 const button = (text, extra, onClick, props = {}) =>
   h("button", { className: `text-button ${extra}`.trim(), type: "button", textContent: text, on: { click: onClick }, ...props });
 
-// Edit one tile. `ctx` supplies the page: hass, profile, rules, the view being
-// edited, the model, a `render` call for entities the model lacks, and `drawIcon`.
+// Edit one tile. `ctx` supplies hass, profile, rules, the view, the model,
+// `render` for entities the model lacks, and `drawIcon`.
 export function tileDialog(ctx, tile, onSave) {
   let entity = tile?.entity_id ?? null;
   let items = entity ? controlItems(ctx.rules, entity, ctx.hass.states[entity], tile?.controls) : [];
@@ -204,9 +204,8 @@ export function tileDialog(ctx, tile, onSave) {
   refresh();
 }
 
-// Edit one view: its title, layout, and snapshot flag, or move or delete it.
-// `view` is the draft view; `sleeps` tells whether a snapshot view applies. The
-// flag is also shown when it is set on a device that no longer sleeps, to clear it.
+// Edit one view: title, layout and snapshot flag, or move or delete it. The
+// flag shows when the device sleeps, or when it is set, so it can be cleared.
 export function viewDialog(ctx, view, position, onApply) {
   const title = h("input", { type: "text", maxLength: 32, value: view.title });
   const layout = h(

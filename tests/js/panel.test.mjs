@@ -135,7 +135,7 @@ test("a state frame keeps the device picker", async () => {
   assert.equal(header.children[1], picker);
 });
 
-// --- editing ------------------------------------------------------------------
+// --- editing -----------------------------------------------------------------
 
 const tender = vector("tender");
 const rules = { domains: ["light", "climate"], controls: {} };

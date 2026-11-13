@@ -1,6 +1,6 @@
-// Small DOM helpers. The page uses only the elements Home Assistant's main bundle
-// always defines (`ha-card`, `ha-icon`, `ha-menu-button`), each with a plain
-// fallback, so a renamed element costs polish and not function.
+// Small DOM helpers. The page uses only elements HA's main bundle defines
+// (`ha-card`, `ha-icon`, `ha-menu-button`), each with a plain fallback, so a
+// renamed element costs polish and not function.
 
 // Build an element: `props` become properties, `attrs` become attributes.
 export function h(tag, props = {}, ...children) {

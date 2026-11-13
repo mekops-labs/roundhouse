@@ -1,4 +1,4 @@
-// The Roundhouse sidebar page: edit the views of a device on a canvas that shows
+// The Roundhouse sidebar page: edit a device's views on a canvas that shows
 // them as the device will draw them.
 
 import {
@@ -30,8 +30,8 @@ const DRAFT_KEY = "roundhouse.draft.";
 const RENDER_WAIT = 150;
 const RENDER_BATCH = 64; // the most entities the integration renders in one call
 
-// Each entity of the views with its icon override: the first tile's that has one,
-// as the integration publishes it.
+// Each entity of the views with its icon override, the first tile's that has
+// one, as the integration publishes it.
 function iconOverrides(views) {
   const out = new Map();
   for (const view of views) {
@@ -141,7 +141,7 @@ class RoundhousePanel extends HTMLElement {
     this._version = null;
     this._narrow = false;
     this._renderTimer = 0;
-    // States rendered for the draft only; drawn over the saved ones in edit mode.
+    // States rendered for the draft only, drawn over the saved ones.
     this._preview = { snapshot: null, states: {}, icons: {} };
     this._drafted = {}; // entity -> { state, icon } last rendered into the preview
     this._beforeUnload = (event) => {
@@ -200,7 +200,7 @@ class RoundhousePanel extends HTMLElement {
     this._stop();
   }
 
-  // --- the connection ---------------------------------------------------------
+  // --- the connection --------------------------------------------------------
 
   async _start() {
     try {
@@ -269,7 +269,7 @@ class RoundhousePanel extends HTMLElement {
     this._render();
   }
 
-  // --- the draft --------------------------------------------------------------
+  // --- the draft -------------------------------------------------------------
 
   _dirty() {
     return Boolean(this._draft && isDirty(this._draft));
@@ -279,7 +279,7 @@ class RoundhousePanel extends HTMLElement {
     return this._model.snapshot;
   }
 
-  // What the canvas draws: the saved states, and in edit mode the draft's on top.
+  // What the canvas draws: saved states, in edit mode with the draft's on top.
   _drawModel() {
     if (!this._draft) return this._model;
     return {
@@ -307,7 +307,7 @@ class RoundhousePanel extends HTMLElement {
     if (this._deviceId) store(DRAFT_KEY + this._deviceId, this._dirty() ? this._draft : null);
   }
 
-  // Take back the edits kept while the page was away, if the views are unchanged.
+  // Take back edits kept while the page was away, if the views are unchanged.
   _restore(snapshot) {
     const kept = stored(DRAFT_KEY + this._deviceId);
     store(DRAFT_KEY + this._deviceId, null);
@@ -358,7 +358,7 @@ class RoundhousePanel extends HTMLElement {
       this._saving = false;
       this._renderHeader();
       if (result.ok) {
-        // Edited while the save was in flight: keep those edits on the new revision.
+        // Edited while saving: keep those edits on the new revision.
         this._draft = rebase(this._draft, result.revision, sent);
         this._render();
       } else if (result.error === "conflict") {
@@ -410,8 +410,8 @@ class RoundhousePanel extends HTMLElement {
     }, RENDER_WAIT);
   }
 
-  // An entity drawn as saved (same icon override, state known) needs no preview; a
-  // preview left by a dialog or an undone edit is dropped then.
+  // An entity drawn as saved (same icon override, state known) needs no
+  // preview; one left by a dialog or an undone edit is dropped then.
   async _renderDraft() {
     const snapshot = this._snapshot();
     if (!this._draft || !snapshot || !this._hass) return;
@@ -454,7 +454,7 @@ class RoundhousePanel extends HTMLElement {
     }
   }
 
-  // --- drawing ----------------------------------------------------------------
+  // --- drawing ---------------------------------------------------------------
 
   _render() {
     this._renderTabs();
@@ -681,7 +681,7 @@ class RoundhousePanel extends HTMLElement {
     );
   }
 
-  // --- editing ----------------------------------------------------------------
+  // --- editing ---------------------------------------------------------------
 
   _dialogContext(view) {
     const snapshot = this._snapshot();

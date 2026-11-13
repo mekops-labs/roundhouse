@@ -27,9 +27,8 @@ function make(revision, snapshot, views) {
   return { revision, snapshot, views, base: JSON.stringify({ snapshot, views }) };
 }
 
-// Start a draft from a snapshot message of the integration. A snapshot view kept
-// from a time the device slept is dropped: a device that does not sleep has none,
-// and the page offers no control to clear it.
+// Start a draft from a snapshot message of the integration. A device that
+// does not sleep has no snapshot view, so one kept from before is dropped.
 export function fromSnapshot(snapshot) {
   const sleeps = (snapshot.profile?.features ?? []).includes("sleep");
   return make(snapshot.revision, sleeps ? (snapshot.snapshot ?? null) : null, snapshot.views.map(plain));
