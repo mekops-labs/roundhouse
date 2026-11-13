@@ -119,6 +119,20 @@ class RuleError:
         }
 
 
+def icon_overrides(views: Sequence[Mapping[str, Any]]) -> dict[str, str | None]:
+    """Return each tile entity with its icon override, None when it has none.
+
+    The device holds one state per entity, so the first tile with an override sets
+    the icon for every tile of that entity.
+    """
+    entities: dict[str, str | None] = {}
+    for view in views:
+        for tile in view["tiles"]:
+            if entities.get(tile["entity_id"]) is None:
+                entities[tile["entity_id"]] = tile.get("icon") or None
+    return entities
+
+
 def domain_of(entity_id: str) -> str | None:
     """Return the domain of a well-formed entity ID, else None."""
     match = _ENTITY_ID.match(entity_id)

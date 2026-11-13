@@ -13,7 +13,7 @@ from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
-from . import icons, issues, layout, viewrules
+from . import codec, icons, issues, layout, viewrules
 from .const import store_key
 from .debounce import Debounce
 
@@ -50,11 +50,13 @@ class SaveResult:
     views: list[dict[str, Any]] = field(default_factory=list)
     conflict: bool = False
     errors: list[viewrules.RuleError] = field(default_factory=list)
+    # The runtime stopped (the entry reloads); the caller retries on the new one.
+    stopped: bool = False
 
     @property
     def ok(self) -> bool:
         """Return whether the save was stored."""
-        return not self.conflict and not self.errors
+        return not self.conflict and not self.errors and not self.stopped
 
 
 def _tile(raw: Any) -> Any:
@@ -152,32 +154,52 @@ class ViewSync:
         async with self._lock:
             await self._publish()
 
+    def _definition(
+        self,
+        views: list[dict[str, Any]],
+        snapshot: str | None,
+        profile: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], list[layout.Overflow]]:
+        """Return the `views` payload of these views and the views left out."""
+        published, overflows = layout.fit(views, profile, self._friendly_name)
+        payload = {
+            "views": published,
+            "snapshot_view": layout.snapshot_view(published, profile, snapshot),
+            "skipped": 0,
+        }
+        return payload, overflows
+
     async def _publish(self) -> None:
         device = self._device
         profile = device.profile
         if self._stopped or profile is None:
             return
-        published, self.overflows = layout.fit(self.views, profile, self._friendly_name)
+        payload, self.overflows = self._definition(self.views, self.snapshot, profile)
         self._sync_overflow_issues()
         self._entities = frozenset(
             t["entity_id"] for v in self.views for t in v["tiles"]
         )
-        icon_overrides: dict[str, str] = {}
-        for view in self.views:
-            for tile in view["tiles"]:
-                if tile.get("icon"):
-                    icon_overrides.setdefault(tile["entity_id"], tile["icon"])
-        device.set_views(
-            {
-                "views": published,
-                "snapshot_view": layout.snapshot_view(
-                    published, profile, self.snapshot
-                ),
-                "skipped": 0,
-            },
-            icon_overrides,
-        )
+        overrides = viewrules.icon_overrides(self.views)
+        device.set_views(payload, {e: i for e, i in overrides.items() if i})
         await device.async_publish_all()
+
+    def _size_error(
+        self,
+        views: list[dict[str, Any]],
+        snapshot: str | None,
+        profile: Mapping[str, Any],
+    ) -> viewrules.RuleError | None:
+        """Return an error when the definition exceeds the device's payload limit."""
+        payload, _ = self._definition(views, snapshot, profile)
+        size = len(codec.encode(payload))
+        limit = self._device.publisher.max_payload
+        if size <= limit:
+            return None
+        return viewrules.RuleError(
+            "too_large",
+            f"The views take {size} bytes and the device accepts at most {limit}; "
+            "remove tiles or views",
+        )
 
     async def async_save(
         self,
@@ -191,12 +213,17 @@ class ViewSync:
             raise ValueError("The device has no profile yet")
         await self._hass.async_add_executor_job(icons.warm)
         async with self._lock:
+            if self._stopped:
+                return SaveResult(self.revision, stopped=True)
             if revision != self.revision:
                 return SaveResult(self.revision, conflict=True)
             candidate = [_view(v) for v in views]
             errors = viewrules.validate(
                 candidate, snapshot, profile, icon_known=icons.known
             )
+            if not errors:
+                too_large = self._size_error(candidate, snapshot, profile)
+                errors = [too_large] if too_large else []
             if errors:
                 return SaveResult(self.revision, errors=errors)
             self.revision += 1
@@ -223,10 +250,16 @@ class ViewSync:
     async def _async_rename(self, old: str, new: str) -> None:
         """Follow an entity whose ID changed: its tiles take the new ID."""
         async with self._lock:
+            if self._stopped:
+                return
+            changed = False
             for view in self.views:
                 for tile in view["tiles"]:
                     if tile["entity_id"] == old:
                         tile["entity_id"] = new
+                        changed = True
+            if not changed:
+                return  # a save removed the tiles while this waited for the lock
             self.revision += 1
             await self._save()
             await self._publish()

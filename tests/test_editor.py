@@ -199,6 +199,48 @@ async def test_a_stale_save_is_a_conflict_that_names_the_revision(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
+async def test_a_save_that_meets_a_reload_lands_on_the_new_runtime(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
+    old = the_device(hass)
+    first = old.views.async_save
+
+    async def reload_first(*args: Any) -> Any:
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        return await first(*args)
+
+    old.views.async_save = reload_first  # type: ignore[method-assign]
+    client = await hass_ws_client(hass)
+    views = resolve(tender_profile, config(("home", cards("light.l0", "light.l1"))))
+    result = await call(client, save_command(1, views))
+    assert result["ok"] is True and result["revision"] == 2
+    new = the_device(hass)
+    assert new is not old and new.views.revision == 2
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_a_save_on_a_stopped_runtime_is_an_error(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    await setup(hass, tender_profile, config(("home", cards("light.l0"))))
+    the_device(hass).views.async_stop()
+    client = await hass_ws_client(hass)
+    views = resolve(tender_profile, config(("home", cards("light.l1"))))
+    await client.send_json_auto_id(save_command(1, views))
+    reply = await client.receive_json()
+    assert reply["success"] is False
+    assert reply["error"]["code"] == "home_assistant_error"
+    assert the_device(hass).views.revision == 1
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
 async def test_a_new_view_comes_back_with_its_path(
     hass: HomeAssistant,
     hass_ws_client: Any,

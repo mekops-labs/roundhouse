@@ -222,6 +222,7 @@ async def test_a_view_the_profile_cannot_show_is_left_out_with_an_issue(
         "capacity": "8",
     }
     message = notified[issue_id]["message"]
+    assert notified[issue_id]["title"] == "Roundhouse: view too large"
     assert "remove 6 tile(s)" in message and "does not show this view" in message
     assert [(o.path, o.excess) for o in the_device(hass).views.overflows] == [
         ("big", 6)
@@ -244,6 +245,8 @@ async def test_a_view_the_profile_cannot_show_is_left_out_with_an_issue(
 async def test_a_view_whose_layout_is_gone_gets_its_own_issue(
     hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
+    notified: dict[str, Any] = {}
+    pn.async_register_callback(hass, lambda _kind, items: notified.update(items))
     entry = await setup(hass, tender_profile, config(("home", tiles(2)), layout=1))
     await advance(hass, STALE_SETTLE_SECONDS + 1)
     one_layout = {**tender_profile, "layouts": tender_profile["layouts"][:1]}
@@ -256,6 +259,8 @@ async def test_a_view_whose_layout_is_gone_gets_its_own_issue(
         DOMAIN, issues.overflow_issue_id("tender01", "home")
     )
     assert issue is not None and issue.translation_key == "view_layout_gone"
+    notice = notified[issues.overflow_issue_id("tender01", "home")]
+    assert notice["title"] == "Roundhouse: view layout gone"
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
@@ -300,6 +305,45 @@ async def test_a_new_friendly_name_republishes_after_a_wait(
     await advance(hass, NAME_WAIT + 1)
     assert views_publishes(mqtt_mock)[-1]["views"][0]["tiles"][0]["name"] == "New"
     assert the_device(hass).views.revision == 1  # a name is not a stored change
+
+
+async def test_a_definition_larger_than_the_device_accepts_is_refused(
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
+) -> None:
+    await setup(hass, tender_profile, config(("home", tiles(1))))
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+    device = the_device(hass)
+    current = len(codec.encode(device.views_payload or {}))
+    device.publisher.max_payload = current + 10
+    result = await save(hass, config(("home", tiles(8)), ("more", tiles(8))))
+    assert [e.code for e in result.errors] == ["too_large"]
+    assert device.views.revision == 1 and len(device.views.views) == 1
+    assert len(views_publishes(mqtt_mock)) == 1
+
+
+async def test_a_stopped_runtime_stores_nothing(
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
+) -> None:
+    await setup(hass, tender_profile, config(("home", tiles(1))))
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+    device = the_device(hass)
+    device.views.async_stop()
+    result = await save(hass, config(("home", tiles(3))))
+    assert result.stopped and not result.ok
+    assert device.views.revision == 1
+    store: Store[dict[str, Any]] = Store(hass, 2, store_key("tender01", "views"))
+    assert (await store.async_load() or {})["revision"] == 1
+
+
+async def test_a_rename_with_no_tile_left_changes_nothing(
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
+) -> None:
+    await setup(hass, tender_profile, config(("home", tiles(1))))
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+    device = the_device(hass)
+    await device.views._async_rename("light.gone", "light.new")
+    assert device.views.revision == 1
+    assert len(views_publishes(mqtt_mock)) == 1
 
 
 def test_overflow_issue_ids_never_collide() -> None:

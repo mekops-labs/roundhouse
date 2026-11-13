@@ -237,3 +237,16 @@ def test_resolve_falls_back_to_the_friendly_name_then_the_entity_id() -> None:
     assert vr.resolve_tile(tile(), lambda _e: "Kitchen")["name"] == "Kitchen"
     assert vr.resolve_tile(tile(), lambda _e: None)["name"] == "light.kitchen"
     assert "controls" not in vr.resolve_tile(tile(), lambda _e: None)
+
+
+def test_the_first_icon_override_of_an_entity_wins() -> None:
+    views = [
+        {"tiles": [{"entity_id": "light.a"}, {"entity_id": "light.b", "icon": ""}]},
+        {
+            "tiles": [
+                {"entity_id": "light.a", "icon": "mdi:lamp"},
+                {"entity_id": "light.a", "icon": "mdi:star"},
+            ]
+        },
+    ]
+    assert vr.icon_overrides(views) == {"light.a": "mdi:lamp", "light.b": None}

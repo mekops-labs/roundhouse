@@ -98,6 +98,7 @@ def raise_overflow(
     issue_id = overflow_issue_id(device_id, path)
     if layout_gone:
         key = "view_layout_gone"
+        heading = "Roundhouse: view layout gone"
         text = (
             f"View '{title}' cannot be shown on {device_id}: its layout is no "
             "longer offered. Open the Roundhouse page and choose another layout. "
@@ -105,6 +106,7 @@ def raise_overflow(
         )
     else:
         key = "view_overflow"
+        heading = "Roundhouse: view too large"
         text = (
             f"View '{title}' does not fit on {device_id}: remove {excess} "
             f"tile(s), its layout holds {capacity}. The device does not show "
@@ -125,7 +127,7 @@ def raise_overflow(
         },
     )
     persistent_notification.async_create(
-        hass, text, title="Roundhouse: view too large", notification_id=issue_id
+        hass, text, title=heading, notification_id=issue_id
     )
 
 

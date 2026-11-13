@@ -36,6 +36,9 @@ from .device import Device
 
 _LOGGER = logging.getLogger(__name__)
 
+# How often a save is tried when the device's runtime stops under it.
+SAVE_TRIES = 3
+
 
 def _devices(hass: HomeAssistant) -> dict[str, Device]:
     return {
@@ -54,16 +57,6 @@ def rules() -> dict[str, Any]:
             for domain, controls in viewrules.CONTROLS.items()
         },
     }
-
-
-def _icon_overrides(views: list[dict[str, Any]]) -> dict[str, str | None]:
-    """Return each tile entity with the icon override of its first tile."""
-    entities: dict[str, str | None] = {}
-    for view in views:
-        for tile in view["tiles"]:
-            if entities.get(tile["entity_id"]) is None:
-                entities[tile["entity_id"]] = tile.get("icon")
-    return entities
 
 
 async def build_snapshot(hass: HomeAssistant, device: Device) -> dict[str, Any]:
@@ -91,7 +84,9 @@ async def build_snapshot(hass: HomeAssistant, device: Device) -> dict[str, Any]:
                 },
             }
         )
-    states, icons = await render_states(hass, device, _icon_overrides(sync.views))
+    states, icons = await render_states(
+        hass, device, viewrules.icon_overrides(sync.views)
+    )
     return {
         "type": "snapshot",
         "device_id": device.device_id,
@@ -192,7 +187,7 @@ class Subscription:
         self._track(device, snapshot)
 
     def _track(self, device: Device, snapshot: dict[str, Any]) -> None:
-        self._cards = _icon_overrides(snapshot["views"])
+        self._cards = viewrules.icon_overrides(snapshot["views"])
         entities = frozenset(self._cards)
         if entities == self._tracked:
             return
@@ -305,7 +300,21 @@ async def ws_save(
     result = await device.views.async_save(
         msg["revision"], msg["views"], msg["snapshot"]
     )
-    if result.conflict:
+    for _ in range(SAVE_TRIES - 1):
+        if not result.stopped:
+            break
+        # The entry reloaded while the save waited; the new runtime takes it.
+        device = _device_or_error(hass, connection, msg)
+        if device is None:
+            return
+        result = await device.views.async_save(
+            msg["revision"], msg["views"], msg["snapshot"]
+        )
+    if result.stopped:
+        connection.send_error(
+            msg["id"], ws_const.ERR_HOME_ASSISTANT_ERROR, "The device is reloading"
+        )
+    elif result.conflict:
         connection.send_result(
             msg["id"], {"ok": False, "error": "conflict", "revision": result.revision}
         )
@@ -325,7 +334,7 @@ async def ws_save(
         )
 
 
-# The most entities one render call takes: a draft cannot hold more tiles.
+# The most entities one render call takes; the page sends more in several calls.
 MAX_RENDER = 64
 
 
