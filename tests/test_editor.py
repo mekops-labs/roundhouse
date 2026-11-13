@@ -14,6 +14,7 @@ from homeassistant.setup import async_setup_component
 
 from custom_components.roundhouse import codec, editor, layout, viewrules
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
+from custom_components.roundhouse.panelreg import PANEL_DIR
 
 from .conftest import make_entry, vector
 from .helpers import advance, cards, config, resolve, save, setup, the_device, tiles
@@ -25,6 +26,20 @@ async def frontend(hass: HomeAssistant) -> None:
     hass.config.components.update({"auth", "onboarding", "frontend", "api"})
     assert await async_setup_component(hass, "http", {})
     assert await async_setup_component(hass, "websocket_api", {})
+
+
+PANEL_FILES = (
+    "panel.js",
+    "dialogs.js",
+    "dom.js",
+    "draft.js",
+    "draw.js",
+    "geometry.js",
+    "mask.js",
+    "rules.js",
+    "state.js",
+    "version.js",
+)
 
 
 async def subscribe(client: Any, device_id: str = "tender01") -> int:
@@ -538,6 +553,8 @@ async def test_the_panel_is_registered_as_an_admin_only_custom_panel(
     config_ = panel.config["_panel_custom"]
     assert config_["name"] == "roundhouse-panel"
     assert config_["module_url"].startswith("/roundhouse_panel/panel.js?v=")
+    manifest = json.loads((PANEL_DIR.parent / "manifest.json").read_text())
+    assert panel.config["version"] == manifest["version"]
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
@@ -550,7 +567,7 @@ async def test_the_panel_files_are_served(
 ) -> None:
     await setup(hass, tender_profile, config(("home", [])))
     client = await hass_client()
-    for name in ("panel.js", "geometry.js", "mask.js", "state.js", "draw.js"):
+    for name in PANEL_FILES:
         response = await client.get(f"/roundhouse_panel/{name}")
         assert response.status == 200, name
         assert "javascript" in response.headers["Content-Type"]
@@ -584,7 +601,7 @@ def test_the_panel_imports_only_files_it_ships() -> None:
     from custom_components.roundhouse.panelreg import PANEL_DIR
 
     names = {p.name for p in PANEL_DIR.glob("*.js")}
-    assert {"panel.js", "geometry.js", "mask.js", "state.js", "draw.js"} <= names
+    assert set(PANEL_FILES) <= names
     for path in PANEL_DIR.glob("*.js"):
         for target in re.findall(r"from \"\./([\w.-]+)\"", path.read_text()):
             assert target in names, f"{path.name} imports {target}"

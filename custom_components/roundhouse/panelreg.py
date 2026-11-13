@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from pathlib import Path
 
@@ -27,6 +28,12 @@ def _version() -> str:
     return digest.hexdigest()[:12]
 
 
+def _manifest_version() -> str:
+    """Return the version the manifest declares."""
+    manifest = json.loads((PANEL_DIR.parent / "manifest.json").read_text())
+    return str(manifest["version"])
+
+
 async def async_register_panel(hass: HomeAssistant) -> bool:
     """Register the admin-only panel once; return whether it is registered.
 
@@ -39,6 +46,7 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
         _LOGGER.debug("No frontend: the preview panel is not registered")
         return False
     version = await hass.async_add_executor_job(_version)
+    release = await hass.async_add_executor_job(_manifest_version)
     await hass.http.async_register_static_paths(
         [StaticPathConfig(PANEL_STATIC_URL, str(PANEL_DIR), cache_headers=False)]
     )
@@ -50,6 +58,7 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
         sidebar_title="Roundhouse",
         sidebar_icon="mdi:view-dashboard",
         require_admin=True,
+        config={"version": release},
     )
     hass.data[_REGISTERED] = True
     return True
