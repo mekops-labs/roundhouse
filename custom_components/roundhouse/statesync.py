@@ -42,7 +42,7 @@ class StateSync:
 
     @property
     def translator(self) -> rendering.Translator:
-        """Return the translator, shared with the preview."""
+        """Return the translator, shared with the editor page."""
         return self._translator
 
     @callback

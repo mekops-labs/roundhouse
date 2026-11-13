@@ -1,4 +1,4 @@
-"""Register the preview panel in the Home Assistant sidebar."""
+"""Register the editor page in the Home Assistant sidebar."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ async def async_register_panel(hass: HomeAssistant) -> bool:
     if hass.data.get(_REGISTERED):
         return True
     if "frontend" not in hass.config.components or getattr(hass, "http", None) is None:
-        _LOGGER.debug("No frontend: the preview panel is not registered")
+        _LOGGER.debug("No frontend: the editor page is not registered")
         return False
     version = await hass.async_add_executor_job(_version)
     release = await hass.async_add_executor_job(_manifest_version)
