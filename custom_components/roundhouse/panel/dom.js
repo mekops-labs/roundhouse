@@ -54,7 +54,8 @@ export function menuButton(hass, narrow) {
   );
 }
 
-// Run `fn` for each animation frame request at most once at a time.
+// Return a function that runs `fn` on the next animation frame, once however
+// often it is called before that frame.
 export function once(fn) {
   let pending = 0;
   return () => {

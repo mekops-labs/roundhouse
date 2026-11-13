@@ -10,6 +10,7 @@ import {
   isDirty,
   moveTile,
   moveView,
+  rebase,
   removeTile,
   replaceTile,
   setLayout,
@@ -30,6 +31,7 @@ const tile = (i) => ({ entity_id: `light.l${i}` });
 const tiles = (n) => Array.from({ length: n }, (_, i) => tile(i));
 const snapshot = (views, extra = {}) => ({
   revision: 4,
+  profile: tender,
   snapshot: null,
   views: views.map((v) => ({ overflow: null, ...v })),
   ...extra,
@@ -205,4 +207,22 @@ test("the snapshot view must exist, on a device that sleeps", () => {
   const ok = setSnapshot(draft, "home");
   assert.deepEqual(errorsOf(ok, tender, rules), []);
   assert.deepEqual(errorsOf(ok, wall, rules).map((e) => e.code), ["bad_snapshot"]);
+});
+
+test("a snapshot view kept from a device that slept is dropped from the draft", () => {
+  const draft = fromSnapshot(snapshot([home()], { snapshot: "home", profile: wall }));
+  assert.equal(draft.snapshot, null);
+  assert.equal(isDirty(draft), false, "nothing to save unless the user edits");
+  assert.deepEqual(errorsOf(draft, wall, rules), []);
+  assert.equal(toSave(draft).snapshot, null);
+});
+
+test("a rebased draft keeps the edits made after what was sent", () => {
+  const sent = setTitle(fromSnapshot(snapshot([home()])), "home", "Lounge");
+  const later = setTitle(sent, "home", "Kitchen");
+  const draft = rebase(later, 5, sent);
+  assert.equal(draft.revision, 5);
+  assert.equal(draft.views[0].title, "Kitchen");
+  assert.equal(isDirty(draft), true);
+  assert.equal(isDirty(rebase(sent, 5, sent)), false);
 });

@@ -290,3 +290,85 @@ test("the header shows the version, linked only for a release", async () => {
   const plain = el._headerEl.children.find((c) => c.className === "version");
   assert.equal(plain.tagName, "span");
 });
+
+// A callWS answer the test releases when it wants.
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+test("a second Done while saving sends nothing", async () => {
+  const pending = deferred();
+  const { el, calls } = await editor({ "roundhouse/editor/save": pending.promise });
+  el._edit();
+  const first = el._done();
+  await el._done();
+  assert.equal(calls.filter((c) => c.type === "roundhouse/editor/save").length, 1);
+  pending.resolve({ ok: true, revision: 4 });
+  await first;
+  assert.equal(el._draft, null);
+  assert.equal(el._banner, null);
+});
+
+test("edits made while a save is in flight are kept on the new revision", async () => {
+  const pending = deferred();
+  const { el, conn } = await editor({ "roundhouse/editor/save": pending.promise });
+  const { setTitle } = await import("../../custom_components/roundhouse/panel/draft.js");
+  el._edit();
+  el._changed(setTitle(el._draft, "home", "Lounge"));
+  const saving = el._done();
+  el._changed(setTitle(el._draft, "home", "Kitchen"));
+  pending.resolve({ ok: true, revision: 4 });
+  await saving;
+  assert.equal(el._draft.views[0].title, "Kitchen");
+  assert.equal(el._draft.revision, 4);
+  assert.equal(el._dirty(), true);
+  conn.subs[0].callback(saved(4)); // the snapshot of our own save, arriving late
+  assert.equal(el._banner, null);
+});
+
+test("switching devices drops the draft kept for the old one", async () => {
+  const { el, items } = await editor();
+  const { setTitle } = await import("../../custom_components/roundhouse/panel/draft.js");
+  el._edit();
+  el._changed(setTitle(el._draft, "home", "Lounge"));
+  el._keepDraft(); // as leaving the page and coming back does
+  globalThis.confirm = () => true;
+  assert.equal(el._pickDevice("b"), true);
+  delete globalThis.confirm;
+  assert.equal(items.has("roundhouse.draft.a"), false);
+  assert.equal(el._draft, null);
+});
+
+test("states rendered for the draft never reach view mode", async () => {
+  const lamp = { states: { "light.a": { icon: "mdi:lamp", text: "On" } }, icons: {} };
+  const { el, conn } = await editor({ "roundhouse/editor/render": lamp });
+  conn.subs[0].callback({ ...saved(3), states: { "light.a": { icon: "mdi:lightbulb", text: "On" } } });
+  el._edit();
+  const { replaceTile } = await import("../../custom_components/roundhouse/panel/draft.js");
+  el._changed(replaceTile(el._draft, "home", 0, { entity_id: "light.a", icon: "mdi:lamp" }));
+  await el._renderDraft();
+  assert.equal(el._drawModel().states["light.a"].icon, "mdi:lamp");
+
+  // Undoing the icon draws the saved state again.
+  el._changed(replaceTile(el._draft, "home", 0, { entity_id: "light.a" }));
+  await el._renderDraft();
+  assert.equal(el._drawModel().states["light.a"].icon, "mdi:lightbulb");
+
+  // A dialog's render is dropped with the edit.
+  await el._renderEntities({ "light.a": "mdi:lamp" });
+  el._leaveEdit();
+  assert.equal(el._drawModel().states["light.a"].icon, "mdi:lightbulb");
+});
+
+test("a large draft is rendered in batches the integration accepts", async () => {
+  const { el, calls } = await editor({ "roundhouse/editor/render": { states: {}, icons: {} } });
+  el._edit();
+  el._hass.states = {};
+  const many = Array.from({ length: 70 }, (_, i) => ({ entity_id: `light.x${i}` }));
+  el._draft = { ...el._draft, views: [{ ...el._draft.views[0], tiles: many }] };
+  await el._renderDraft();
+  const sizes = calls.filter((c) => c.type === "roundhouse/editor/render").map((c) => Object.keys(c.entities).length);
+  assert.deepEqual(sizes, [64, 6]);
+});

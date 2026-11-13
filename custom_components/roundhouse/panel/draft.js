@@ -2,7 +2,7 @@
 // returns a new draft and leaves its argument alone, so a draft is easy to test
 // and to cancel. The checks mirror the ones the integration makes on a save.
 
-import { layoutIndex } from "./geometry.js";
+import { densest, layoutIndex } from "./geometry.js";
 import { domainOf, isSupported } from "./rules.js";
 
 const MAX_TITLE = 32;
@@ -19,14 +19,6 @@ function newPath(taken) {
   }
 }
 
-function densestLayout(profile) {
-  let best = 0;
-  profile.layouts.forEach((layout, i) => {
-    if (layout.slots.length > profile.layouts[best].slots.length) best = i;
-  });
-  return best;
-}
-
 function plain(view) {
   return { path: view.path, title: view.title, layout: view.layout, tiles: clone(view.tiles) };
 }
@@ -35,9 +27,18 @@ function make(revision, snapshot, views) {
   return { revision, snapshot, views, base: JSON.stringify({ snapshot, views }) };
 }
 
-// Start a draft from a snapshot message of the integration.
+// Start a draft from a snapshot message of the integration. A snapshot view kept
+// from a time the device slept is dropped: a device that does not sleep has none,
+// and the page offers no control to clear it.
 export function fromSnapshot(snapshot) {
-  return make(snapshot.revision, snapshot.snapshot ?? null, snapshot.views.map(plain));
+  const sleeps = (snapshot.profile?.features ?? []).includes("sleep");
+  return make(snapshot.revision, sleeps ? (snapshot.snapshot ?? null) : null, snapshot.views.map(plain));
+}
+
+// After `sent` was saved as `revision`, keep the edits made since as a draft of
+// that revision.
+export function rebase(draft, revision, sent) {
+  return { ...draft, revision, base: JSON.stringify({ snapshot: sent.snapshot, views: sent.views }) };
 }
 
 export function isDirty(draft) {
@@ -60,7 +61,7 @@ export function addView(draft, profile) {
   const titles = draft.views.map((v) => v.title);
   let n = draft.views.length + 1;
   while (titles.includes(`View ${n}`)) n += 1;
-  const view = { path: newPath(taken), title: `View ${n}`, layout: densestLayout(profile), tiles: [] };
+  const view = { path: newPath(taken), title: `View ${n}`, layout: densest(profile), tiles: [] };
   return withViews(draft, [...draft.views, view]);
 }
 

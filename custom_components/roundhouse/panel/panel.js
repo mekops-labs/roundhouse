@@ -10,6 +10,7 @@ import {
   isDirty,
   moveTile,
   moveView,
+  rebase,
   removeTile,
   replaceTile,
   setLayout,
@@ -18,7 +19,7 @@ import {
   toSave,
 } from "./draft.js";
 import { DIALOG_STYLE, tileDialog, viewDialog } from "./dialogs.js";
-import { card, h, icon, iconButton, menuButton } from "./dom.js";
+import { card, h, icon, iconButton, menuButton, once } from "./dom.js";
 import { drawView } from "./draw.js";
 import { fitScale, frameHeight, layoutIndex, slotAt, slotCount, slotRects, tileRect } from "./geometry.js";
 import { tileLabel } from "./rules.js";
@@ -27,6 +28,17 @@ import { changelogUrl } from "./version.js";
 
 const DRAFT_KEY = "roundhouse.draft.";
 const RENDER_WAIT = 150;
+const RENDER_BATCH = 64; // the most entities the integration renders in one call
+
+// Each entity of the views with its icon override: the first tile's that has one,
+// as the integration publishes it.
+function iconOverrides(views) {
+  const out = new Map();
+  for (const view of views) {
+    for (const t of view.tiles) if ((out.get(t.entity_id) ?? null) === null) out.set(t.entity_id, t.icon || null);
+  }
+  return out;
+}
 
 const STYLE = `
   :host { display: block; min-height: 100%; box-sizing: border-box; background: var(--primary-background-color); color: var(--primary-text-color); font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif); }
@@ -119,7 +131,7 @@ class RoundhousePanel extends HTMLElement {
     this._deviceId = null;
     this._unsubscribe = null;
     this._generation = 0; // bumped by _stop; a subscription from an older one is dropped
-    this._frame = 0;
+    this._schedule = once(() => this._render());
     this._error = null;
     this._draft = null; // the views being edited; null in view mode
     this._activePath = null;
@@ -129,7 +141,9 @@ class RoundhousePanel extends HTMLElement {
     this._version = null;
     this._narrow = false;
     this._renderTimer = 0;
-    this._drafted = {}; // entity -> the Home Assistant state last rendered for a draft tile
+    // States rendered for the draft only; drawn over the saved ones in edit mode.
+    this._preview = { snapshot: null, states: {}, icons: {} };
+    this._drafted = {}; // entity -> { state, icon } last rendered into the preview
     this._beforeUnload = (event) => {
       if (this._dirty()) {
         event.preventDefault();
@@ -255,14 +269,6 @@ class RoundhousePanel extends HTMLElement {
     this._render();
   }
 
-  _schedule() {
-    if (this._frame) return;
-    this._frame = requestAnimationFrame(() => {
-      this._frame = 0;
-      this._render();
-    });
-  }
-
   // --- the draft --------------------------------------------------------------
 
   _dirty() {
@@ -271,6 +277,21 @@ class RoundhousePanel extends HTMLElement {
 
   _snapshot() {
     return this._model.snapshot;
+  }
+
+  // What the canvas draws: the saved states, and in edit mode the draft's on top.
+  _drawModel() {
+    if (!this._draft) return this._model;
+    return {
+      snapshot: this._model.snapshot,
+      states: { ...this._model.states, ...this._preview.states },
+      icons: { ...this._model.icons, ...this._preview.icons },
+    };
+  }
+
+  _dropPreview() {
+    this._preview = { snapshot: null, states: {}, icons: {} };
+    this._drafted = {};
   }
 
   _views() {
@@ -308,6 +329,7 @@ class RoundhousePanel extends HTMLElement {
     this._banner = null;
     this._errors = [];
     this._saving = false;
+    this._dropPreview();
     store(DRAFT_KEY + this._deviceId, null);
     this._renderHeader();
     this._render();
@@ -319,19 +341,27 @@ class RoundhousePanel extends HTMLElement {
   }
 
   async _done() {
+    if (this._saving) return;
     const snapshot = this._snapshot();
     const found = errorsOf(this._draft, snapshot.profile, snapshot.rules);
     if (found.length) return this._showErrors(found);
+    const sent = this._draft;
     this._saving = true;
+    this._renderHeader();
     try {
       const result = await this._hass.callWS({
         type: "roundhouse/editor/save",
         device_id: this._deviceId,
-        ...toSave(this._draft),
+        ...toSave(sent),
       });
-      if (result.ok) return this._leaveEdit();
+      if (result.ok && this._draft === sent) return this._leaveEdit();
       this._saving = false;
-      if (result.error === "conflict") {
+      this._renderHeader();
+      if (result.ok) {
+        // Edited while the save was in flight: keep those edits on the new revision.
+        this._draft = rebase(this._draft, result.revision, sent);
+        this._render();
+      } else if (result.error === "conflict") {
         this._banner = {
           kind: "error",
           text: "These views were saved from another page in the meantime.",
@@ -343,6 +373,7 @@ class RoundhousePanel extends HTMLElement {
       }
     } catch (err) {
       this._saving = false;
+      this._renderHeader();
       this._banner = { kind: "error", text: `Cannot save: ${err?.message ?? err}` };
       this._render();
     }
@@ -379,34 +410,44 @@ class RoundhousePanel extends HTMLElement {
     }, RENDER_WAIT);
   }
 
+  // An entity drawn as saved (same icon override, state known) needs no preview; a
+  // preview left by a dialog or an undone edit is dropped then.
   async _renderDraft() {
     const snapshot = this._snapshot();
     if (!this._draft || !snapshot || !this._hass) return;
-    const saved = new Map();
-    for (const view of snapshot.views) for (const t of view.tiles) saved.set(t.entity_id, t.icon ?? null);
+    const saved = iconOverrides(snapshot.views);
     const wanted = {};
-    for (const view of this._draft.views) {
-      for (const t of view.tiles) {
-        const unchanged = saved.has(t.entity_id) && saved.get(t.entity_id) === (t.icon ?? null);
-        if (unchanged && t.entity_id in this._model.states) continue;
-        const rendered = t.entity_id in this._drafted && this._drafted[t.entity_id] === this._hass.states[t.entity_id];
-        if (!rendered) wanted[t.entity_id] = t.icon ?? null;
+    let dropped = false;
+    for (const [id, icon] of iconOverrides(this._draft.views)) {
+      if (saved.has(id) && saved.get(id) === icon && id in this._model.states) {
+        if (id in this._preview.states) {
+          delete this._preview.states[id];
+          delete this._drafted[id];
+          dropped = true;
+        }
+        continue;
       }
+      const last = this._drafted[id];
+      if (!last || last.state !== this._hass.states[id] || last.icon !== icon) wanted[id] = icon;
     }
-    const ids = Object.keys(wanted).slice(0, 64);
-    if (!ids.length) return;
-    for (const id of ids) this._drafted[id] = this._hass.states[id];
-    await this._renderEntities(Object.fromEntries(ids.map((id) => [id, wanted[id]])));
+    if (dropped) this._schedule();
+    const ids = Object.keys(wanted);
+    for (let i = 0; i < ids.length; i += RENDER_BATCH) {
+      await this._renderEntities(Object.fromEntries(ids.slice(i, i + RENDER_BATCH).map((id) => [id, wanted[id]])));
+    }
   }
 
+  // Render entities into the draft's preview, which view mode never draws.
   async _renderEntities(entities) {
+    for (const [id, icon] of Object.entries(entities)) this._drafted[id] = { state: this._hass.states[id], icon };
     try {
       const result = await this._hass.callWS({
         type: "roundhouse/editor/render",
         device_id: this._deviceId,
         entities,
       });
-      this._model = mergeRender(this._model, result);
+      if (!this._draft) return;
+      this._preview = mergeRender(this._preview, result);
       this._schedule();
     } catch {
       // A tile without a rendered state shows an ellipsis; nothing else breaks.
@@ -449,15 +490,7 @@ class RoundhousePanel extends HTMLElement {
         select.append(h("option", { value: device.device_id, textContent: device.title, selected: device.device_id === this._deviceId }));
       }
       select.addEventListener("change", () => {
-        if (this._dirty() && !globalThis.confirm?.("Discard your changes?")) {
-          select.value = this._deviceId;
-          return;
-        }
-        this._draft = null;
-        this._banner = null;
-        this._deviceId = select.value;
-        this._subscribe();
-        this._renderHeader();
+        if (!this._pickDevice(select.value)) select.value = this._deviceId;
       });
       children.push(select);
     }
@@ -465,12 +498,26 @@ class RoundhousePanel extends HTMLElement {
     if (this._draft) {
       children.push(
         h("button", { className: "text-button", type: "button", textContent: "Cancel", on: { click: () => this._cancel() } }),
-        h("button", { className: "text-button primary", type: "button", textContent: "Done", on: { click: () => this._done() } }),
+        h("button", { className: "text-button primary", type: "button", textContent: "Done", disabled: this._saving, on: { click: () => this._done() } }),
       );
     } else if (this._snapshot()) {
       children.push(iconButton("mdi:pencil", "✎", "Edit views", () => this._edit()));
     }
     header.replaceChildren(...children);
+  }
+
+  // Show another device; edits of this one are discarded once the user agrees.
+  _pickDevice(deviceId) {
+    if (this._dirty() && !globalThis.confirm?.("Discard your changes?")) return false;
+    store(DRAFT_KEY + this._deviceId, null);
+    this._draft = null;
+    this._banner = null;
+    this._errors = [];
+    this._dropPreview();
+    this._deviceId = deviceId;
+    this._subscribe();
+    this._renderHeader();
+    return true;
   }
 
   _renderTabs() {
@@ -561,7 +608,7 @@ class RoundhousePanel extends HTMLElement {
     canvas.style.width = `${Math.round(canvas.width * scale)}px`;
     canvas.style.height = `${Math.round(canvas.height * scale)}px`;
     const tabs = this._views().map((v) => ({ id: v.path, title: v.title }));
-    drawView(canvas.getContext("2d"), profile, this._model, drawable, { drawIcon, tabs });
+    drawView(canvas.getContext("2d"), profile, this._drawModel(), drawable, { drawIcon, tabs });
 
     const frame = h("div", { className: "frame" }, canvas);
     if (this._draft) frame.append(this._overlay(view, profile, scale, frame));
@@ -644,8 +691,9 @@ class RoundhousePanel extends HTMLElement {
       hass: this._hass,
       profile,
       rules: snapshot.rules,
-      model: () => this._model,
+      model: () => this._drawModel(),
       render: (entities) => this._renderEntities(entities),
+      closed: () => this._scheduleDraftRender(),
       drawIcon,
       slotRect: slotRects(profile, view)[0],
       snapshot: this._draft?.snapshot,

@@ -55,10 +55,13 @@ const CONTROL_LABELS = {
   light_color_temp: "Color temperature",
 };
 
-function open(root, title, body, actions) {
+function open(ctx, title, body, actions) {
   const dlg = h("dialog", {}, h("form", { method: "dialog" }, h("h2", { textContent: title }), h("div", { className: "dlg-body" }, ...body), h("div", { className: "dlg-actions" }, ...actions)));
-  dlg.addEventListener("close", () => dlg.remove());
-  root.append(dlg);
+  dlg.addEventListener("close", () => {
+    dlg.remove();
+    ctx.closed?.();
+  });
+  ctx.root.append(dlg);
   dlg.showModal();
   return dlg;
 }
@@ -183,7 +186,7 @@ export function tileDialog(ctx, tile, onSave) {
   iconInput.addEventListener("change", refresh);
 
   const dlg = open(
-    ctx.root,
+    ctx,
     tile ? "Edit tile" : "Add tile",
     [
       h("div", { className: "field" }, h("span", { textContent: "Entity" }), picked, search, results),
@@ -202,7 +205,8 @@ export function tileDialog(ctx, tile, onSave) {
 }
 
 // Edit one view: its title, layout, and snapshot flag, or move or delete it.
-// `view` is the draft view; `sleeps` tells whether a snapshot view applies.
+// `view` is the draft view; `sleeps` tells whether a snapshot view applies. The
+// flag is also shown when it is set on a device that no longer sleeps, to clear it.
 export function viewDialog(ctx, view, position, onApply) {
   const title = h("input", { type: "text", maxLength: 32, value: view.title });
   const layout = h(
@@ -227,12 +231,12 @@ export function viewDialog(ctx, view, position, onApply) {
     apply({ remove: true });
   });
   const dlg = open(
-    ctx.root,
+    ctx,
     "Edit view",
     [
       h("label", { className: "field" }, h("span", { textContent: "Title" }), title),
       h("label", { className: "field" }, h("span", { textContent: "Layout" }), layout),
-      ctx.sleeps ? h("label", { className: "field" }, h("span", { textContent: "Snapshot view" }), h("span", {}, snapshot, " Shown on the device while it sleeps")) : null,
+      ctx.sleeps || ctx.snapshot === view.path ? h("label", { className: "field" }, h("span", { textContent: "Snapshot view" }), h("span", {}, snapshot, " Shown on the device while it sleeps")) : null,
       h("p", { className: "hint", textContent: "A layout with fewer slots than the view has tiles cannot be chosen." }),
       h("div", {}, button("Move left", "", () => apply({ move: -1 }), { disabled: position.index === 0 }), button("Move right", "", () => apply({ move: 1 }), { disabled: position.index === position.count - 1 })),
     ],
