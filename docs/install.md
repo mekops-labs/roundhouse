@@ -26,11 +26,14 @@ built-in Marketplace.
 
 1. Power on a panel. Home Assistant shows **Discovered: Roundhouse** under
    Settings, Devices & services.
-2. Confirm it and choose the URL path of the panel's dashboard (for example
-   `tender-panel`). Roundhouse creates the dashboard with a starter view, or
-   uses the one that exists, and never overwrites it.
-3. Edit the dashboard. The **Roundhouse** sidebar entry (administrators only)
-   shows each view as the panel will draw it.
+2. Confirm it. Roundhouse adds the panel with one empty view, **Home**.
+3. Open **Roundhouse** in the sidebar (administrators only). Select the pencil
+   to edit the views of the panel:
+   - Select **+** in a free slot to add a tile, and pick an entity.
+   - Drag a tile by its handle to move it.
+   - Select **+** next to the tabs to add a view, and the pencil on a tab to
+     rename, reorder, delete, or change the layout of a view.
+   - Select **Done** to save. The panel shows the change at once.
 
 To install by hand, copy `custom_components/roundhouse` into the `config`
 directory of Home Assistant and restart.
@@ -98,10 +101,8 @@ Roundhouse reports problems as repair issues (Settings, Repairs):
 | Device sent an unusable profile | an unknown pixel format or a broken announce | update the panel firmware |
 | Device uses another contract version | the major versions differ | update Roundhouse or the panel |
 | The MQTT birth message is disabled | see above | enable it |
-| The dashboard is auto-generated | no cards of its own | open it, choose Edit, take control |
-| The dashboard was deleted | removed in the UI | create a dashboard with the same URL path |
-| View does not fit | more tiles than the densest layout holds | remove as many tiles as the issue states |
+| View does not fit | the panel now announces a layout with fewer slots than the view has tiles | remove as many tiles as the issue states |
+| View has no layout | the panel no longer offers the layout of the view | open the view in the editor and choose another layout |
 
-The panel keeps the last version of a view that fitted until you fix the
-overflow. A view that never fitted is not shown on the panel. Set `custom_components.roundhouse` to `debug` in the Home Assistant
+The panel does not show a view that does not fit until you fix it. Set `custom_components.roundhouse` to `debug` in the Home Assistant
 logger to see every command and its result.

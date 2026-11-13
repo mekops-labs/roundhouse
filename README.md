@@ -1,10 +1,10 @@
 # Roundhouse
 
 Home Assistant custom integration that serves panel devices over MQTT. Each
-device gets a dashboard authored in Home Assistant, live entity state, control
-of those entities, and alerts. Devices draw their own pixels; Roundhouse reads
-Lovelace, formats state, rasterizes icons, and scales images for each device's
-announced screen.
+device gets views you build in Roundhouse's own editor page, live entity state,
+control of those entities, and alerts. Devices draw their own pixels;
+Roundhouse stores the views, formats state, rasterizes icons, and scales images
+for each device's announced screen.
 
 Status: early release. `CHANGELOG.md` lists the current version.
 
@@ -18,14 +18,20 @@ per-device broker logins, and the broker ACL that is the security control.
 - Home Assistant stable or the release before it.
 - Home Assistant's `mqtt` integration, with the birth message enabled.
 
-## Preview panel
+## Editor
 
-An admin-only "Roundhouse" entry in the sidebar shows each view of a device
-drawn as the device will draw it: its screen size, header, tab strip, layout,
-and live tiles with the same icons, state text, and colors the device gets. Tiles
-that do not fit are hatched in red with their number and the capacity (`16 / 15`),
-below the screen. It updates after every dashboard save and on every state
-change. Fonts differ slightly from the device; the geometry and the capacity do not.
+One admin-only "Roundhouse" entry in the sidebar edits the views of every
+device. The page draws each view as the device will draw it: its screen size,
+header, tab strip, layout, and live tiles with the same icons, state text, and
+colors the device gets. Fonts differ slightly from the device; the geometry and
+the slot count do not.
+
+- Select the pencil to edit. Changes stay a draft until you select **Done**.
+- Each view has a layout that you choose from the device's own. A view takes no
+  more tiles than its layout has slots.
+- A tile is one entity of a supported domain. Its dialog offers a name, an icon,
+  and the controls of the entity's detail page on the device.
+- The header shows the running Roundhouse version and links to its changelog.
 
 ## Entities
 
@@ -34,7 +40,7 @@ Each panel is a Home Assistant device with:
 - a `device_tracker` for presence (home while online, and for the grace period
   after it goes offline);
 - sensors for the battery level, the power mode (devices that sleep), the
-  contract version, the skipped cards, and the unread alerts;
+  contract version, and the unread alerts;
 - a binary sensor for charging, when the device reports a charging state;
 - a `notify` entity.
 

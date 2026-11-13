@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Views are built in the Roundhouse page in the sidebar and stored by
+  Roundhouse. Setup asks only for confirmation and adds one empty view, `Home`.
+  No dashboard is created or read, so a device adds nothing else to the sidebar.
+- The Roundhouse page is an editor: add, rename, reorder, and delete views;
+  choose each view's layout; add, edit, move, and remove tiles; save with
+  **Done**. It follows the Lovelace edit mode and the user's theme.
+- A save is checked as a whole against the device's profile and publishes at
+  once. A save that breaks a rule, or is based on stale views, changes nothing.
+- Each view has a layout you choose. A full view takes no more tiles.
+- A view that a changed device profile can no longer show is not shown on the
+  device, and a repair issue names it.
+- A tile follows its entity when the entity ID changes.
+- The page header shows the running version and links to its changelog.
+- WebSocket commands: `roundhouse/devices`, `roundhouse/editor/subscribe`,
+  `roundhouse/editor/save`, and `roundhouse/editor/render`.
+- A tile offers only the controls its entity's domain supports.
+
+### Removed
+
+- The dashboard per device, its URL path in setup, and the dashboard digest.
+  Views of 0.1.0 are not carried over: each device starts with one empty view.
+  Delete the old dashboards by hand.
+- The snapshot-view option: choose the snapshot view in the view dialog.
+- The skipped-cards sensor, and the repair issues for an auto-generated or a
+  deleted dashboard.
+
 ## 0.1.0 (2026-11-12)
 
 ### Added

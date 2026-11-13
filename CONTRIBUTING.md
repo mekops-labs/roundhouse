@@ -27,8 +27,8 @@ mise run rig -- up            # containers, waits until Home Assistant answers
 mise run rig -- onboard       # owner, token, MQTT integration
 mise run double -- tender &   # a device double: tender or wall
 mise run rig -- confirm       # accept the discovered device
-mise run rig -- seed          # demo states and a dashboard (--scenario overflow)
-mise run rig -- shot          # screenshot the Roundhouse panel (Playwright container)
+mise run rig -- seed          # demo states and views (--scenario full)
+mise run rig -- shot          # screenshot the Roundhouse page (--edit for edit mode)
 mise run rig -- logs
 mise run rig -- down
 ```
