@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { recorder, vector } from "./helpers.mjs";
+
 class FakeNode {
   constructor(tag) {
     this.tagName = tag;
@@ -16,6 +18,13 @@ class FakeNode {
     this.children = nodes;
   }
   addEventListener() {}
+  setAttribute() {}
+  getContext() {
+    return recorder().ctx;
+  }
+  get classList() {
+    return { add() {}, remove() {}, toggle() {} };
+  }
 }
 
 const defined = {};
@@ -28,7 +37,7 @@ globalThis.HTMLElement = class {
     return this._connected ?? false;
   }
 };
-globalThis.customElements = { define: (name, cls) => (defined[name] = cls) };
+globalThis.customElements = { define: (name, cls) => (defined[name] = cls), get: () => undefined };
 globalThis.document = { createElement: (tag) => new FakeNode(tag) };
 globalThis.requestAnimationFrame = () => 1; // never draw: the test reads the model
 

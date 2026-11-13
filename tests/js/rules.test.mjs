@@ -8,6 +8,8 @@ import {
   entityOptions,
   isSupported,
   tileLabel,
+  toggleChoice,
+  toggleItem,
 } from "../../custom_components/roundhouse/panel/rules.js";
 
 const rules = {
@@ -139,4 +141,23 @@ test("a mode control with no mode on lists no values rather than all of them", (
 test("a domain without controls has none to choose", () => {
   assert.deepEqual(controlItems(rules, "lock.door", states["lock.door"], undefined), []);
   assert.equal(buildControls([]), undefined);
+});
+
+test("the last control that is on cannot be switched off", () => {
+  const items = controlItems(rules, "climate.heat", states["climate.heat"], undefined);
+  assert.equal(toggleItem(items, "hvac_mode"), true);
+  assert.deepEqual(items.map((i) => i.on), [false, true]);
+  assert.equal(toggleItem(items, "target_temperature"), false);
+  assert.deepEqual(items.map((i) => i.on), [false, true]);
+  assert.equal(toggleItem(items, "hvac_mode"), true);
+  assert.deepEqual(items.map((i) => i.on), [true, true]);
+});
+
+test("the last mode that is on cannot be switched off", () => {
+  const [item] = controlItems(rules, "climate.heat", states["climate.heat"], undefined);
+  assert.equal(toggleChoice(item, "heat"), true);
+  assert.equal(toggleChoice(item, "cool"), true);
+  assert.equal(toggleChoice(item, "off"), false);
+  assert.deepEqual(item.choices.map((c) => c.on), [false, false, true]);
+  assert.equal(toggleChoice(item, "heat"), true);
 });

@@ -63,3 +63,20 @@ export function buildControls(items) {
     return control;
   });
 }
+
+// Switch a control on or off. The last control on stays on: an empty list would
+// mean every control, not none. Return whether the switch happened.
+export function toggleItem(items, type) {
+  const item = items.find((i) => i.type === type);
+  if (item.on && items.filter((i) => i.on).length === 1) return false;
+  item.on = !item.on;
+  return true;
+}
+
+// Switch a mode on or off. The last mode on stays on, as above.
+export function toggleChoice(item, value) {
+  const choice = item.choices.find((c) => c.value === value);
+  if (choice.on && item.choices.filter((c) => c.on).length === 1) return false;
+  choice.on = !choice.on;
+  return true;
+}
