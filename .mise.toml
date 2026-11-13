@@ -23,7 +23,7 @@ description = "Run the test suite"
 run = "pytest -q"
 
 [tasks.test-js]
-description = "Run the preview panel tests"
+description = "Run the editor page tests"
 run = "node --test \"tests/js/*.test.mjs\""
 
 [tasks.rig]
