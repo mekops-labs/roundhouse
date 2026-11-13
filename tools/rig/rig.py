@@ -123,6 +123,10 @@ def up(language: str) -> None:
         MOSQUITTO_ACL if ACL else MOSQUITTO
     )
     if ACL:
+        # The broker container owns these after a run; take them back, and drop
+        # the password file, which mosquitto_passwd will not overwrite.
+        podman("unshare", "chown", "-R", "0:0", str(RIG / "mosquitto/config"))
+        podman("unshare", "rm", "-f", str(RIG / "mosquitto/config/passwd"))
         (RIG / "mosquitto/config/acl").write_text(ACL_FILE)
         passwords = credentials()
         commands = [

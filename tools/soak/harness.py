@@ -300,9 +300,19 @@ def setup(devices: list[tuple[str, str, str]]) -> tuple[Ha, list[Double]]:
     for double in doubles:
         result = ha.save_views(double.device_id, double.profile, [("home", POOL[:5])])
         assert result["ok"], result
+    # Content, not recency: a state kept from an earlier run makes the same save
+    # publish nothing new, so wait for the retained messages that match.
+    first = [
+        (
+            "views",
+            lambda b: (
+                [t["entity_id"] for v in b["views"] for t in v["tiles"]] == POOL[:5]
+            ),
+        )
+    ] + [(f"state/{e}", lambda b: True) for e in POOL[:5]]
     for double in doubles:  # start only once everything is out
-        for suffix in ["views"] + [f"state/{e}" for e in POOL[:5]]:
-            if double.wait(suffix, lambda b: True, started, 30) is None:
+        for suffix, matches in first:
+            if double.wait(suffix, matches, started - 3600, 30) is None:
                 raise TimeoutError(f"{double.device_id}: no {suffix} after setup")
     return ha, doubles
 
