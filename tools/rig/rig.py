@@ -479,7 +479,12 @@ def seed(device_id: str, profile_name: str, scenario: str) -> None:
 
 
 def screenshot(
-    out: Path, wait: int = 7000, poke: str = "", after: int = 500, device: str = ""
+    out: Path,
+    wait: int = 7000,
+    poke: str = "",
+    after: int = 500,
+    device: str = "",
+    edit: bool = False,
 ) -> None:
     """Run tools/rig/shot.py in Playwright's container (the host lacks browser libraries)."""
     saved = tokens()
@@ -512,7 +517,8 @@ def screenshot(
         f" python3 /tools/shot.py --base {BASE} --out /rig/{out.name}"
         f" --wait {wait} --after {after}"
         + (f" --poke '{poke}'" if poke else "")
-        + (f" --device {device}" if device else ""),
+        + (f" --device {device}" if device else "")
+        + (" --edit" if edit else ""),
         check=False,
     )
     print(result.stdout, result.stderr[-1500:] if result.returncode else "")
@@ -561,6 +567,7 @@ def main() -> None:
     sh.add_argument("--out", default=str(RIG / "panel.png"))
     sh.add_argument("--poke", default="")
     sh.add_argument("--device", default="")
+    sh.add_argument("--edit", action="store_true")
     sh.add_argument("--after", type=int, default=500)
     sub.add_parser("logs")
     sub.add_parser("confirm")
@@ -574,7 +581,13 @@ def main() -> None:
     elif args.cmd == "seed":
         seed(args.device, args.profile, args.scenario)
     elif args.cmd == "shot":
-        screenshot(Path(args.out), poke=args.poke, after=args.after, device=args.device)
+        screenshot(
+            Path(args.out),
+            poke=args.poke,
+            after=args.after,
+            device=args.device,
+            edit=args.edit,
+        )
     elif args.cmd == "confirm":
         confirm()
     else:

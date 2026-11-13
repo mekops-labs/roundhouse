@@ -35,6 +35,7 @@ async def main() -> None:
     parser.add_argument(
         "--device", default="", help="device ID to pick in the panel's selector"
     )
+    parser.add_argument("--edit", action="store_true", help="enter edit mode first")
     parser.add_argument(
         "--poke",
         default="",
@@ -68,6 +69,13 @@ async def main() -> None:
                 args.device,
             )
             await page.wait_for_timeout(2500)
+        if args.edit:
+            await page.evaluate(
+                "() => { const find = (root) => { const el = root.querySelector('roundhouse-panel'); if (el) return el;"
+                " for (const n of root.querySelectorAll('*')) { if (n.shadowRoot) { const f = find(n.shadowRoot); if (f) return f; } }"
+                " return null; }; find(document).shadowRoot.querySelector('button[aria-label=\"Edit views\"]').click(); }"
+            )
+            await page.wait_for_timeout(800)
         await page.screenshot(path=args.out)
         print(json.dumps(await page.evaluate(COUNT), indent=1))
         if args.poke:
