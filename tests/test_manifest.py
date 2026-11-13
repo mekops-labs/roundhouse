@@ -10,5 +10,8 @@ def test_manifest_subscribes_to_announce() -> None:
     assert json.loads(MANIFEST.read_text())["mqtt"] == ["roundhouse/+/announce"]
 
 
-def test_manifest_depends_on_mqtt_and_lovelace() -> None:
-    assert {"mqtt", "lovelace"} <= set(json.loads(MANIFEST.read_text())["dependencies"])
+def test_manifest_depends_on_mqtt_and_orders_after_the_frontend() -> None:
+    manifest = json.loads(MANIFEST.read_text())
+    assert "mqtt" in manifest["dependencies"]
+    assert "lovelace" not in manifest["dependencies"]
+    assert {"frontend", "http", "panel_custom"} <= set(manifest["after_dependencies"])

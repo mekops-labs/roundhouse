@@ -21,7 +21,7 @@ from custom_components.roundhouse import cmdhandler
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 
 from .conftest import announce, vector
-from .test_views import PREFIX, advance, config, setup
+from .helpers import PREFIX, advance, config, setup
 
 CLIMATE_ATTRS = {
     "hvac_modes": ["heat", "off", "cool"],
@@ -33,17 +33,16 @@ CLIMATE_ATTRS = {
 
 def home_cards() -> list[dict[str, Any]]:
     return [
-        {"type": "tile", "entity": "light.l0"},
-        {"type": "tile", "entity": "lock.door"},
-        {"type": "tile", "entity": "scene.s"},
-        {"type": "tile", "entity": "sensor.temp"},
-        {"type": "tile", "entity": "number.n"},
+        {"entity_id": "light.l0"},
+        {"entity_id": "lock.door"},
+        {"entity_id": "scene.s"},
+        {"entity_id": "sensor.temp"},
+        {"entity_id": "number.n"},
         {
-            "type": "tile",
-            "entity": "climate.hp",
-            "features": [
-                {"type": "climate-hvac-modes", "hvac_modes": ["heat", "off"]},
-                {"type": "target-temperature"},
+            "entity_id": "climate.hp",
+            "controls": [
+                {"type": "hvac_mode", "values": ["heat", "off"]},
+                {"type": "target_temperature"},
             ],
         },
     ]
@@ -51,7 +50,7 @@ def home_cards() -> list[dict[str, Any]]:
 
 @pytest.fixture
 async def ready(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> Any:
     """A set-up device whose views hold a few entities."""
     hass.states.async_set("light.l0", "off")
@@ -415,18 +414,16 @@ async def test_commands_are_denied_while_the_device_is_in_meta_only_mode(
 
 
 async def test_an_entity_on_two_tiles_passes_if_any_tile_allows_the_value(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("climate.hp", "heat", CLIMATE_ATTRS)
     narrow = {
-        "type": "tile",
-        "entity": "climate.hp",
-        "features": [{"type": "climate-hvac-modes", "hvac_modes": ["off"]}],
+        "entity_id": "climate.hp",
+        "controls": [{"type": "hvac_mode", "values": ["off"]}],
     }
     wide = {
-        "type": "tile",
-        "entity": "climate.hp",
-        "features": [{"type": "climate-hvac-modes", "hvac_modes": ["heat", "cool"]}],
+        "entity_id": "climate.hp",
+        "controls": [{"type": "hvac_mode", "values": ["heat", "cool"]}],
     }
     entry = await setup(hass, tender_profile, config(("home", [narrow, wide])))
     assert entry.entry_id in hass.data[DOMAIN]

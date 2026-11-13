@@ -11,11 +11,11 @@ from unittest.mock import patch
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.roundhouse import codec, lovelace_io, rendering
+from custom_components.roundhouse import codec, rendering
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 
 from .conftest import announce, vector
-from .test_views import PREFIX, advance, config, save, setup, tiles
+from .helpers import PREFIX, advance, cards, config, save, setup, tiles
 
 
 def sent(mqtt_mock: Any, topic: str) -> list[bytes]:
@@ -30,15 +30,8 @@ def last_state(mqtt_mock: Any, entity_id: str) -> dict[str, Any]:
     return json.loads(sent(mqtt_mock, f"state/{entity_id}")[-1])  # type: ignore[no-any-return]
 
 
-def cards(*entities: str, **icons: str) -> list[dict[str, Any]]:
-    return [
-        {"type": "tile", "entity": e, **({"icon": icons[e]} if e in icons else {})}
-        for e in entities
-    ]
-
-
 async def test_states_and_icons_are_published_on_setup(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "off", {"friendly_name": "Lamp"})
     hass.states.async_set(
@@ -69,7 +62,7 @@ async def test_states_and_icons_are_published_on_setup(
 
 
 async def test_a_state_change_is_published_and_an_unchanged_one_is_not(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "off")
     await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -87,7 +80,7 @@ async def test_a_state_change_is_published_and_an_unchanged_one_is_not(
 
 
 async def test_unused_icons_are_cleared_when_the_state_changes(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "off")
     entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -104,7 +97,7 @@ async def test_unused_icons_are_cleared_when_the_state_changes(
 
 
 async def test_a_shared_icon_is_published_once(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     for i in range(3):
         hass.states.async_set(f"light.l{i}", "on")
@@ -118,7 +111,7 @@ async def test_a_shared_icon_is_published_once(
 
 
 async def test_removing_a_tile_clears_its_state_and_icon(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     hass.states.async_set("lock.door", "locked")
@@ -130,14 +123,13 @@ async def test_removing_a_tile_clears_its_state_and_icon(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
     await save(hass, config(("home", cards("light.l0"))))
-    await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     assert "state/lock.door" not in device.publisher.owned
     assert "icon/mdi_lock" not in device.publisher.owned
     assert "state/light.l0" in device.publisher.owned
 
 
 async def test_a_card_icon_overrides_the_entity_icon(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     await setup(
@@ -151,7 +143,7 @@ async def test_a_card_icon_overrides_the_entity_icon(
 
 
 async def test_a_missing_entity_is_published_as_unavailable(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     await setup(hass, tender_profile, config(("home", cards("light.nowhere"))))
     msg = last_state(mqtt_mock, "light.nowhere")
@@ -163,7 +155,7 @@ async def test_a_missing_entity_is_published_as_unavailable(
 
 
 async def test_the_polish_language_reaches_the_device(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.config.language = "pl"
     hass.states.async_set("lock.door", "locked")
@@ -173,7 +165,7 @@ async def test_the_polish_language_reaches_the_device(
 
 
 async def test_meta_only_mode_clears_states_and_icons(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -189,7 +181,7 @@ async def test_meta_only_mode_clears_states_and_icons(
 
 
 async def test_a_reconnect_republishes_states_and_icons(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     from homeassistant.components.mqtt.const import MQTT_CONNECTION_STATE
     from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -207,7 +199,7 @@ async def test_a_reconnect_republishes_states_and_icons(
 
 
 async def test_an_oversized_state_is_dropped_not_fatal(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     profile = json.loads(json.dumps(tender_profile))
     profile["limits"]["max_payload"] = 3000  # the icon mask fits, a fat state does not
@@ -223,7 +215,7 @@ async def test_an_oversized_state_is_dropped_not_fatal(
 
 
 async def test_entities_in_overflowing_views_are_not_published(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     for i in range(18):
         hass.states.async_set(f"light.l{i}", "on")
@@ -330,13 +322,13 @@ async def test_encode_runs_in_the_executor_and_reports_bad_images(
 
 
 async def test_the_wall_panel_gets_masks_at_its_own_icon_size(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None
+    hass: HomeAssistant, mqtt_mock: Any
 ) -> None:
     from .conftest import make_entry
 
     wall = vector("announce", "wall-panel")["payload"]
     hass.states.async_set("light.l0", "on", {"rgb_color": [0, 255, 0]})
-    entry = make_entry(wall, "tender01", "tender-panel")
+    entry = make_entry(wall, "tender01")
     await setup(hass, wall, config(("home", cards("light.l0"))), entry=entry)
     (mask,) = sent(mqtt_mock, "icon/mdi_lightbulb")
     assert len(mask) == 48 * 24  # icon_px 48, two pixels per byte

@@ -1,4 +1,4 @@
-"""The preview websocket and the panel registration."""
+"""The editor's websocket commands and the panel registration."""
 
 from __future__ import annotations
 
@@ -12,29 +12,24 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
-from custom_components.roundhouse import codec, layout, lovelace_io
+from custom_components.roundhouse import codec, editor, layout, viewrules
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 
 from .conftest import make_entry, vector
-from .test_views import advance, config, save, setup, tiles
+from .helpers import advance, cards, config, resolve, save, setup, the_device, tiles
 
 
 @pytest.fixture
-async def lovelace(hass: HomeAssistant) -> None:
-    """Lovelace with a real HTTP server and websocket API, for a real client."""
+async def frontend(hass: HomeAssistant) -> None:
+    """The parts of a real instance the panel registration needs."""
     hass.config.components.update({"auth", "onboarding", "frontend", "api"})
-    assert await async_setup_component(hass, "lovelace", {})
     assert await async_setup_component(hass, "http", {})
     assert await async_setup_component(hass, "websocket_api", {})
 
 
-def cards(*entities: str) -> list[dict[str, Any]]:
-    return [{"type": "tile", "entity": e} for e in entities]
-
-
 async def subscribe(client: Any, device_id: str = "tender01") -> int:
     await client.send_json_auto_id(
-        {"type": "roundhouse/preview/subscribe", "device_id": device_id}
+        {"type": "roundhouse/editor/subscribe", "device_id": device_id}
     )
     reply = await client.receive_json()
     assert reply["success"], reply
@@ -48,11 +43,48 @@ async def event(client: Any) -> dict[str, Any]:
     return msg["event"]  # type: ignore[no-any-return]
 
 
+async def call(client: Any, command: dict[str, Any]) -> dict[str, Any]:
+    await client.send_json_auto_id(command)
+    reply = await client.receive_json()
+    assert reply["success"], reply
+    return reply["result"]  # type: ignore[no-any-return]
+
+
+async def call_with_events(
+    client: Any, command: dict[str, Any], events: int
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Send a command and read its result and the events it caused, in any order."""
+    await client.send_json_auto_id(command)
+    result: dict[str, Any] | None = None
+    seen: list[dict[str, Any]] = []
+    for _ in range(events + 1):
+        async with asyncio.timeout(5):
+            msg = await client.receive_json()
+        if msg["type"] == "result":
+            assert msg["success"], msg
+            result = msg["result"]
+        else:
+            seen.append(msg["event"])
+    assert result is not None
+    return result, seen
+
+
+def save_command(
+    revision: int, views: list[dict[str, Any]], snapshot: str | None = None
+) -> dict[str, Any]:
+    return {
+        "type": "roundhouse/editor/save",
+        "device_id": "tender01",
+        "revision": revision,
+        "views": views,
+        "snapshot": snapshot,
+    }
+
+
 async def test_the_first_message_is_a_snapshot_of_the_device(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     hass.states.async_set(
@@ -65,15 +97,10 @@ async def test_the_first_message_is_a_snapshot_of_the_device(
     snap = await event(client)
     assert snap["type"] == "snapshot" and snap["device_id"] == "tender01"
     assert snap["profile"] == tender_profile
-    assert snap["dashboard"] == "config"
+    assert snap["revision"] == 1 and snap["snapshot"] is None
     (view,) = snap["views"]
-    assert (view["path"], view["layout"], view["count"], view["capacity"]) == (
-        "home",
-        0,
-        2,
-        15,
-    )
-    assert view["overflow"] is False and view["published"] is True
+    assert (view["path"], view["title"], view["layout"]) == ("home", "Home", 0)
+    assert view["overflow"] is None
     assert [t["entity_id"] for t in view["tiles"]] == ["light.l0", "lock.door"]
     # The states are what the device receives, icons included.
     assert snap["states"]["light.l0"]["text"] == "On · 80%"
@@ -85,11 +112,27 @@ async def test_the_first_message_is_a_snapshot_of_the_device(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
+async def test_the_snapshot_carries_the_rules_of_the_editor(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    await setup(hass, tender_profile, None)
+    client = await hass_ws_client(hass)
+    await subscribe(client)
+    rules = (await event(client))["rules"]
+    assert set(rules["domains"]) == viewrules.SUPPORTED_DOMAINS
+    assert {"type": "hvac_mode", "values_attr": "hvac_modes"} in rules["controls"][
+        "climate"
+    ]
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
 async def test_a_save_pushes_a_new_snapshot_within_the_budget(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -98,44 +141,130 @@ async def test_a_save_pushes_a_new_snapshot_within_the_budget(
     assert len((await event(client))["views"][0]["tiles"]) == 1
 
     started = time.perf_counter()
-    await save(hass, config(("home", cards("light.l0", "light.l1", "light.l2"))))
-    await advance(hass, lovelace_io.UPDATE_WAIT + 1)
-    snap = await event(client)
-    assert len(snap["views"][0]["tiles"]) == 3
-    # The 2 s wait of the digest is fake time here; the rest takes no time.
-    assert (
-        time.perf_counter() - started < 1
-    )  # the whole path is far inside its 3 s budget
+    views = resolve(tender_profile, config(("home", cards("light.l0", "light.l1"))))
+    result, [snap] = await call_with_events(client, save_command(1, views), 1)
+    assert result["ok"] is True and result["revision"] == 2
+    assert len(snap["views"][0]["tiles"]) == 2 and snap["revision"] == 2
+    assert time.perf_counter() - started < 1  # Done to publish and page update
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
-async def test_an_overflowing_view_is_included_and_marked(
+async def test_a_save_that_breaks_a_rule_returns_every_error(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
-    await setup(hass, tender_profile, config(("home", tiles(3))))
+    await setup(hass, tender_profile, config(("home", cards("light.l0"))))
+    client = await hass_ws_client(hass)
+    views = resolve(tender_profile, config(("home", [{"entity_id": "weather.x"}])))
+    views[0]["title"] = ""
+    result = await call(client, save_command(1, views))
+    assert result["ok"] is False and result["error"] == "invalid"
+    assert {(e["view"], e["tile"], e["code"]) for e in result["errors"]} == {
+        (0, None, "bad_title"),
+        (0, 0, "unsupported_domain"),
+    }
+    assert the_device(hass).views.revision == 1
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_a_stale_save_is_a_conflict_that_names_the_revision(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    await setup(hass, tender_profile, config(("home", cards("light.l0"))))
+    client = await hass_ws_client(hass)
+    views = resolve(tender_profile, config(("home", cards("light.l1"))))
+    assert (await call(client, save_command(1, views)))["ok"] is True
+    again = await call(client, save_command(1, views))
+    assert again == {"ok": False, "error": "conflict", "revision": 2}
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_a_new_view_comes_back_with_its_path(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    await setup(hass, tender_profile, config(("home", [])))
+    client = await hass_ws_client(hass)
+    views = resolve(tender_profile, config(("home", []), ("x", [])))
+    del views[1]["path"]
+    result = await call(client, save_command(1, views, "home"))
+    assert result["ok"] is True
+    assert result["views"][0]["path"] == "home"
+    assert result["views"][1]["path"]
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_a_view_the_profile_cannot_show_is_marked_in_the_snapshot(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    entry = await setup(hass, tender_profile, config(("home", tiles(14))))
+    wall = vector("announce", "wall-panel")["payload"]
+    hass.config_entries.async_update_entry(entry, data={**entry.data, "profile": wall})
+    await hass.async_block_till_done()
     client = await hass_ws_client(hass)
     await subscribe(client)
-    await event(client)
+    (view,) = (await event(client))["views"]
+    assert view["overflow"] == {
+        "tiles": 14,
+        "capacity": 8,
+        "excess": 6,
+        "layout_gone": False,
+    }
+    assert len(view["tiles"]) == 14  # the editor shows every tile, to mark the excess
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
 
-    await save(hass, config(("home", tiles(18)), ("new", tiles(16))))
-    await advance(hass, lovelace_io.UPDATE_WAIT + 1)
-    snap = await event(client)
-    home, new = snap["views"]
-    # Both overflow; neither is published as digested, but "home" still shows
-    # its last good definition on the device.
-    assert (home["overflow"], home["count"], home["capacity"], home["layout"]) == (
-        True,
-        18,
-        15,
-        None,
+
+async def test_the_render_command_renders_entities_not_saved_yet(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    hass.states.async_set("lock.door", "locked")
+    await setup(hass, tender_profile, config(("home", [])))
+    client = await hass_ws_client(hass)
+    result = await call(
+        client,
+        {
+            "type": "roundhouse/editor/render",
+            "device_id": "tender01",
+            "entities": {"lock.door": None, "light.l9": "mdi:ceiling-light"},
+        },
     )
-    assert home["published"] is True
-    assert len(home["tiles"]) == 18  # the preview shows every tile, to mark the excess
-    assert (new["overflow"], new["published"], new["count"]) == (True, False, 16)
+    assert result["states"]["lock.door"]["icon"] == "mdi:lock"
+    assert result["states"]["light.l9"]["icon"] == "mdi:ceiling-light"
+    assert set(result["icons"]) == {"mdi:lock", "mdi:ceiling-light"}
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_the_render_command_refuses_a_big_batch(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    await setup(hass, tender_profile, config(("home", [])))
+    client = await hass_ws_client(hass)
+    entities = {f"light.l{i}": None for i in range(editor.MAX_RENDER + 1)}
+    await client.send_json_auto_id(
+        {
+            "type": "roundhouse/editor/render",
+            "device_id": "tender01",
+            "entities": entities,
+        }
+    )
+    reply = await client.receive_json()
+    assert reply["success"] is False and reply["error"]["code"] == "invalid_format"
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
@@ -143,7 +272,6 @@ async def test_a_state_change_pushes_a_state_message(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     hass.states.async_set("light.l0", "off")
@@ -164,7 +292,6 @@ async def test_entities_outside_the_views_send_nothing(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -179,26 +306,11 @@ async def test_entities_outside_the_views_send_nothing(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
-async def test_an_auto_generated_dashboard_previews_as_empty(
-    hass: HomeAssistant,
-    hass_ws_client: Any,
-    mqtt_mock: Any,
-    lovelace: None,
-    tender_profile: dict[str, Any],
-) -> None:
-    await setup(hass, tender_profile, None)
-    client = await hass_ws_client(hass)
-    await subscribe(client)
-    snap = await event(client)
-    assert snap["dashboard"] == "strategy" and snap["views"] == []
-    await advance(hass, STALE_SETTLE_SECONDS + 1)
-
-
 async def test_the_wall_panel_snapshot_carries_its_own_profile(
-    hass: HomeAssistant, hass_ws_client: Any, mqtt_mock: Any, lovelace: None
+    hass: HomeAssistant, hass_ws_client: Any, mqtt_mock: Any
 ) -> None:
     wall = vector("announce", "wall-panel")["payload"]
-    entry = make_entry(wall, "wall01", "tender-panel")
+    entry = make_entry(wall, "wall01")
     await setup(hass, wall, config(("home", tiles(7))), entry=entry)
     client = await hass_ws_client(hass)
     await subscribe(client, "wall01")
@@ -208,7 +320,7 @@ async def test_the_wall_panel_snapshot_carries_its_own_profile(
         "height": 480,
         "format": "rgb565",
     }
-    assert snap["views"][0]["layout"] == 1 and snap["views"][0]["capacity"] == 8
+    assert snap["views"][0]["layout"] == 1
     px = wall["icon_px"]
     assert all(
         len(base64.b64decode(m)) == px * ((px + 1) // 2) for m in snap["icons"].values()
@@ -220,31 +332,40 @@ async def test_the_device_list(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     await setup(hass, tender_profile, config(("home", [])))
     client = await hass_ws_client(hass)
-    await client.send_json_auto_id({"type": "roundhouse/preview/devices"})
-    reply = await client.receive_json()
-    assert reply["success"] and reply["result"] == [
+    assert await call(client, {"type": "roundhouse/devices"}) == [
         {"device_id": "tender01", "model": "tender", "title": "Tender tender01"}
     ]
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        {"type": "roundhouse/editor/subscribe", "device_id": "nope"},
+        {"type": "roundhouse/editor/render", "device_id": "nope", "entities": {}},
+        {
+            "type": "roundhouse/editor/save",
+            "device_id": "nope",
+            "revision": 1,
+            "views": [],
+            "snapshot": None,
+        },
+    ],
+)
 async def test_an_unknown_device_is_an_error(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
+    command: dict[str, Any],
 ) -> None:
     await setup(hass, tender_profile, config(("home", [])))
     client = await hass_ws_client(hass)
-    await client.send_json_auto_id(
-        {"type": "roundhouse/preview/subscribe", "device_id": "nope"}
-    )
+    await client.send_json_auto_id(command)
     reply = await client.receive_json()
     assert reply["success"] is False and reply["error"]["code"] == "not_found"
     await advance(hass, STALE_SETTLE_SECONDS + 1)
@@ -253,16 +374,23 @@ async def test_an_unknown_device_is_an_error(
 @pytest.mark.parametrize(
     "command",
     [
-        {"type": "roundhouse/preview/devices"},
-        {"type": "roundhouse/preview/subscribe", "device_id": "tender01"},
+        {"type": "roundhouse/devices"},
+        {"type": "roundhouse/editor/subscribe", "device_id": "tender01"},
+        {"type": "roundhouse/editor/render", "device_id": "tender01", "entities": {}},
+        {
+            "type": "roundhouse/editor/save",
+            "device_id": "tender01",
+            "revision": 1,
+            "views": [],
+            "snapshot": None,
+        },
     ],
 )
-async def test_the_preview_is_admin_only(
+async def test_the_editor_is_admin_only(
     hass: HomeAssistant,
     hass_ws_client: Any,
     hass_read_only_access_token: str,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     command: dict[str, Any],
 ) -> None:
@@ -271,6 +399,7 @@ async def test_the_preview_is_admin_only(
     await client.send_json_auto_id(command)
     reply = await client.receive_json()
     assert reply["success"] is False and reply["error"]["code"] == "unauthorized"
+    assert the_device(hass).views.revision == 1
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
@@ -278,7 +407,6 @@ async def test_unsubscribing_stops_the_stream(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -301,11 +429,10 @@ async def test_unsubscribing_stops_the_stream(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
-async def test_two_panels_follow_the_same_device(
+async def test_two_editors_follow_the_same_device(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -314,22 +441,21 @@ async def test_two_panels_follow_the_same_device(
     await subscribe(b)
     await event(a)
     await event(b)
-    hass.states.async_set("light.l0", "on")
-    await hass.async_block_till_done()
-    assert (await event(a))["entity_id"] == (await event(b))["entity_id"] == "light.l0"
+    views = resolve(tender_profile, config(("home", cards("light.l0", "light.l1"))))
+    result, _ = await call_with_events(a, save_command(1, views), 1)
+    assert result["ok"] is True
+    # Editor b learns of the save made in a, with the new revision.
+    assert (await event(b))["revision"] == 2
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
-async def test_the_preview_does_not_publish_anything_to_the_broker(
+async def test_subscribing_publishes_nothing_to_the_broker(
     hass: HomeAssistant,
     hass_ws_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
-    await setup(
-        hass, tender_profile, config(("home", tiles(18)))
-    )  # an overflowing view
+    await setup(hass, tender_profile, config(("home", tiles(3))))
     await advance(hass, STALE_SETTLE_SECONDS + 1)
     mqtt_mock.async_publish.reset_mock()
     client = await hass_ws_client(hass)
@@ -339,11 +465,68 @@ async def test_the_preview_does_not_publish_anything_to_the_broker(
     assert layout.capacity(tender_profile) == 15
 
 
+async def test_the_editor_follows_the_device_through_a_reload(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
+    client = await hass_ws_client(hass)
+    await subscribe(client)
+    assert len((await event(client))["views"][0]["tiles"]) == 1
+
+    # An options change reloads the entry and builds a new device runtime.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await save(hass, config(("home", cards("light.l0", "light.l1", "light.l2"))))
+    counts = []
+    while 3 not in counts:  # `event` fails after 5 s without a message
+        snap = await event(client)
+        if snap["type"] == "snapshot":
+            counts.append(len(snap["views"][0]["tiles"]))
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
+async def test_a_snapshot_that_finishes_late_is_not_sent(
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
+) -> None:
+    from unittest.mock import patch
+
+    await setup(hass, tender_profile, config(("home", [])))
+    gate, entered = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def build(_hass: HomeAssistant, _device: Any) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        n = calls
+        if n == 1:  # the older snapshot renders slowly
+            entered.set()
+            await gate.wait()
+        return {"type": "snapshot", "views": [], "n": n}
+
+    sent: list[dict[str, Any]] = []
+    sub = editor.Subscription(hass, "tender01", sent.append)
+    with patch.object(editor, "build_snapshot", build):
+        older = hass.async_create_task(sub._push_snapshot())
+        async with asyncio.timeout(5):
+            await entered.wait()
+        await sub._push_snapshot()
+        gate.set()
+        await older
+    assert [m["n"] for m in sent] == [2]
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
 # --- registration -------------------------------------------------------------
 
 
 async def test_the_panel_is_registered_as_an_admin_only_custom_panel(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant,
+    frontend: None,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
 ) -> None:
     await setup(hass, tender_profile, config(("home", [])))
     panel = hass.data["frontend_panels"]["roundhouse"]
@@ -360,9 +543,9 @@ async def test_the_panel_is_registered_as_an_admin_only_custom_panel(
 
 async def test_the_panel_files_are_served(
     hass: HomeAssistant,
+    frontend: None,
     hass_client: Any,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
 ) -> None:
     await setup(hass, tender_profile, config(("home", [])))
@@ -377,7 +560,10 @@ async def test_the_panel_files_are_served(
 
 
 async def test_a_second_setup_does_not_register_the_panel_again(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant,
+    frontend: None,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
 ) -> None:
     from custom_components.roundhouse.panelreg import async_register_panel
 
@@ -406,61 +592,3 @@ def test_the_panel_imports_only_files_it_ships() -> None:
     assert (
         json.loads((PANEL_DIR.parent / "manifest.json").read_text())["domain"] == DOMAIN
     )
-
-
-async def test_the_preview_follows_the_device_through_a_reload(
-    hass: HomeAssistant,
-    hass_ws_client: Any,
-    mqtt_mock: Any,
-    lovelace: None,
-    tender_profile: dict[str, Any],
-) -> None:
-    entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
-    client = await hass_ws_client(hass)
-    await subscribe(client)
-    assert len((await event(client))["views"][0]["tiles"]) == 1
-
-    # An options change reloads the entry and builds a new device runtime.
-    assert await hass.config_entries.async_reload(entry.entry_id)
-    await hass.async_block_till_done()
-    await save(hass, config(("home", cards("light.l0", "light.l1", "light.l2"))))
-    await advance(hass, lovelace_io.UPDATE_WAIT + 1)
-    counts = []
-    while 3 not in counts:  # `event` fails after 5 s without a message
-        snap = await event(client)
-        if snap["type"] == "snapshot":
-            counts.append(len(snap["views"][0]["tiles"]))
-    await advance(hass, STALE_SETTLE_SECONDS + 1)
-
-
-async def test_a_snapshot_that_finishes_late_is_not_sent(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
-) -> None:
-    from unittest.mock import patch
-
-    from custom_components.roundhouse import preview
-
-    await setup(hass, tender_profile, config(("home", [])))
-    gate, entered = asyncio.Event(), asyncio.Event()
-    calls = 0
-
-    async def build(_hass: HomeAssistant, _device: Any) -> dict[str, Any]:
-        nonlocal calls
-        calls += 1
-        n = calls
-        if n == 1:  # the older snapshot renders slowly
-            entered.set()
-            await gate.wait()
-        return {"type": "snapshot", "views": [], "n": n}
-
-    sent: list[dict[str, Any]] = []
-    sub = preview.Subscription(hass, "tender01", sent.append)
-    with patch.object(preview, "build_snapshot", build):
-        older = hass.async_create_task(sub._push_snapshot())
-        async with asyncio.timeout(5):
-            await entered.wait()
-        await sub._push_snapshot()
-        gate.set()
-        await older
-    assert [m["n"] for m in sent] == [2]
-    await advance(hass, STALE_SETTLE_SECONDS + 1)

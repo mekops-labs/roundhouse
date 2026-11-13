@@ -17,15 +17,10 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.roundhouse import lovelace_io
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 from custom_components.roundhouse.publisher import RETRY_SECONDS
 
-from .test_views import PREFIX, advance, config, save, setup
-
-
-def cards(*entities: str) -> list[dict[str, Any]]:
-    return [{"type": "tile", "entity": e} for e in entities]
+from .helpers import PREFIX, advance, cards, config, save, setup
 
 
 def texts(mqtt_mock: Any, topic: str) -> list[str]:
@@ -49,7 +44,7 @@ async def come_back(hass: HomeAssistant, mqtt_mock: Any) -> None:
 
 
 async def test_an_update_during_an_outage_is_sent_when_the_broker_returns(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -70,7 +65,6 @@ async def test_an_update_during_an_outage_is_sent_when_the_broker_returns(
 async def test_a_reconnect_while_the_broker_still_fails_keeps_the_update(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -99,7 +93,6 @@ async def test_a_reconnect_while_the_broker_still_fails_keeps_the_update(
 async def test_a_failed_send_does_not_raise_or_log_an_error(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -118,7 +111,6 @@ async def test_a_failed_send_does_not_raise_or_log_an_error(
 async def test_a_timer_retries_without_a_reconnect_event(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     error: Exception,
 ) -> None:
@@ -139,7 +131,7 @@ async def test_a_timer_retries_without_a_reconnect_event(
 
 
 async def test_the_retry_keeps_trying_while_the_broker_is_away(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -164,7 +156,7 @@ async def test_the_retry_keeps_trying_while_the_broker_is_away(
 
 
 async def test_the_same_payload_is_sent_again_after_a_failure(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     entry = await setup(hass, tender_profile, config(("home", [])))
     publisher = hass.data[DOMAIN][entry.entry_id].publisher
@@ -181,7 +173,7 @@ async def test_the_same_payload_is_sent_again_after_a_failure(
 
 
 async def test_a_failed_clear_is_retried(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     hass.states.async_set("light.l1", "on")
@@ -192,7 +184,6 @@ async def test_a_failed_clear_is_retried(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
     await go_down(mqtt_mock)
     await save(hass, config(("home", cards("light.l0"))))
-    await advance(hass, lovelace_io.UPDATE_WAIT + 1)
     assert "state/light.l1" not in publisher.owned  # no longer ours
     mqtt_mock.async_publish.side_effect = None
     mqtt_mock.async_publish.reset_mock()
@@ -208,7 +199,7 @@ async def test_a_failed_clear_is_retried(
 
 
 async def test_a_topic_published_again_cancels_its_pending_clear(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     entry = await setup(hass, tender_profile, config(("home", [])))
     publisher = hass.data[DOMAIN][entry.entry_id].publisher
@@ -222,7 +213,7 @@ async def test_a_topic_published_again_cancels_its_pending_clear(
 
 
 async def test_an_alert_raised_during_an_outage_reaches_the_device(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     entry = await setup(hass, tender_profile, config(("home", [])))
     device = hass.data[DOMAIN][entry.entry_id]
@@ -242,7 +233,6 @@ async def test_an_alert_raised_during_an_outage_reaches_the_device(
 async def test_a_command_result_that_cannot_be_sent_is_dropped_quietly(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -262,7 +252,7 @@ async def test_a_command_result_that_cannot_be_sent_is_dropped_quietly(
 
 
 async def test_unloading_cancels_the_retry_timer(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     entry = await setup(hass, tender_profile, config(("home", cards("light.l0"))))
@@ -277,7 +267,7 @@ async def test_unloading_cancels_the_retry_timer(
 
 
 async def test_a_failed_stale_clear_at_startup_is_retried(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     import asyncio
 

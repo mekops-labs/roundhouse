@@ -4,10 +4,8 @@ DOMAIN = "roundhouse"
 
 CONF_DEVICE_ID = "device_id"
 CONF_MODEL = "model"
-CONF_SLUG = "slug"
 CONF_PROFILE = "profile"
 
-OPT_SNAPSHOT_VIEW = "snapshot_view"
 OPT_PRESENCE_GRACE_HOURS = "presence_grace_hours"
 OPT_ALERT_MAX_COUNT = "alert_max_count"
 OPT_ALERT_MAX_AGE_DAYS = "alert_max_age_days"
@@ -56,5 +54,7 @@ def presence_signal(device_id: str) -> str:
 
 PANEL_URL_PATH = "roundhouse"
 PANEL_STATIC_URL = "/roundhouse_panel"
-WS_PREVIEW_DEVICES = "roundhouse/preview/devices"
-WS_PREVIEW_SUBSCRIBE = "roundhouse/preview/subscribe"
+WS_DEVICES = "roundhouse/devices"
+WS_EDITOR_SUBSCRIBE = "roundhouse/editor/subscribe"
+WS_EDITOR_SAVE = "roundhouse/editor/save"
+WS_EDITOR_RENDER = "roundhouse/editor/render"

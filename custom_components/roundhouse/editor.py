@@ -1,4 +1,4 @@
-"""The data behind the preview panel: what each view looks like on the device."""
+"""The editor page's side: the views of a device, live state, and saves."""
 
 from __future__ import annotations
 
@@ -22,12 +22,14 @@ from homeassistant.core import (
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_state_change_event
 
-from . import layout, rendering
+from . import rendering, viewrules
 from .compat import vol
 from .const import (
     DOMAIN,
-    WS_PREVIEW_DEVICES,
-    WS_PREVIEW_SUBSCRIBE,
+    WS_DEVICES,
+    WS_EDITOR_RENDER,
+    WS_EDITOR_SAVE,
+    WS_EDITOR_SUBSCRIBE,
     views_signal,
 )
 from .device import Device
@@ -43,43 +45,61 @@ def _devices(hass: HomeAssistant) -> dict[str, Device]:
     }
 
 
-async def build_snapshot(hass: HomeAssistant, device: Device) -> dict[str, Any]:
-    """Return everything the panel draws for a device.
+def rules() -> dict[str, Any]:
+    """Return what the page offers: supported domains and the controls of each."""
+    return {
+        "domains": sorted(viewrules.SUPPORTED_DOMAINS),
+        "controls": {
+            domain: [{"type": c.type, "values_attr": c.values_attr} for c in controls]
+            for domain, controls in viewrules.CONTROLS.items()
+        },
+    }
 
-    Views include those held back for overflow, which are not published. The
-    states are the messages the device receives, and `icons` holds the masks.
-    """
-    profile = device.profile or {}
-    sync = device.views
-    digest = sync.last_digest
-    published = {v["path"] for v in (device.views_payload or {}).get("views", [])}
-    cap = layout.capacity(profile) if profile else 0
-    views: list[dict[str, Any]] = []
+
+def _icon_overrides(views: list[dict[str, Any]]) -> dict[str, str | None]:
+    """Return each tile entity with the icon override of its first tile."""
     entities: dict[str, str | None] = {}
-    for view in digest.views if digest else []:
-        count = len(view.tiles)
-        chosen = layout.choose_layout(profile, count) if profile else None
+    for view in views:
+        for tile in view["tiles"]:
+            if entities.get(tile["entity_id"]) is None:
+                entities[tile["entity_id"]] = tile.get("icon")
+    return entities
+
+
+async def build_snapshot(hass: HomeAssistant, device: Device) -> dict[str, Any]:
+    """Return everything the page draws for a device.
+
+    Views are the stored ones, with the overflow of those the profile cannot
+    show. The states are the messages the device receives, and `icons` holds
+    the masks.
+    """
+    sync = device.views
+    overflows = {o.path: o for o in sync.overflows}
+    views = []
+    for view in sync.views:
+        over = overflows.get(view["path"])
         views.append(
             {
-                "path": view.path,
-                "title": view.title,
-                "layout": chosen,
-                "tiles": [t.as_dict() for t in view.tiles],
-                "count": count,
-                "capacity": cap,
-                "overflow": chosen is None,
-                "published": view.path in published,
+                **view,
+                "overflow": None
+                if over is None
+                else {
+                    "tiles": over.tiles,
+                    "capacity": over.capacity,
+                    "excess": over.excess,
+                    "layout_gone": over.layout_gone,
+                },
             }
         )
-        for tile in view.tiles:
-            entities.setdefault(tile.entity_id, tile.icon)
-    states, icons = await render_states(hass, device, entities)
+    states, icons = await render_states(hass, device, _icon_overrides(sync.views))
     return {
         "type": "snapshot",
         "device_id": device.device_id,
-        "profile": profile,
-        "dashboard": sync.dashboard_state,
+        "profile": device.profile,
+        "revision": sync.revision,
         "views": views,
+        "snapshot": sync.snapshot,
+        "rules": rules(),
         "states": states,
         "icons": icons,
     }
@@ -172,15 +192,8 @@ class Subscription:
         self._track(device, snapshot)
 
     def _track(self, device: Device, snapshot: dict[str, Any]) -> None:
-        entities = frozenset(
-            t["entity_id"] for v in snapshot["views"] for t in v["tiles"]
-        )
-        digest = device.views.last_digest
-        self._cards = {
-            t.entity_id: t.icon
-            for v in (digest.views if digest else [])
-            for t in v.tiles
-        }
+        self._cards = _icon_overrides(snapshot["views"])
+        entities = frozenset(self._cards)
         if entities == self._tracked:
             return
         self._tracked = entities
@@ -216,13 +229,26 @@ class Subscription:
             )
 
 
+def _device_or_error(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> Device | None:
+    device = _devices(hass).get(msg["device_id"])
+    if device is None:
+        connection.send_error(msg["id"], ws_const.ERR_NOT_FOUND, "Unknown device")
+        return None
+    if device.profile is None:
+        connection.send_error(msg["id"], ws_const.ERR_NOT_FOUND, "No profile yet")
+        return None
+    return device
+
+
 @ws_decorators.require_admin
-@ws_decorators.websocket_command({vol.Required("type"): WS_PREVIEW_DEVICES})
+@ws_decorators.websocket_command({vol.Required("type"): WS_DEVICES})
 @callback
 def ws_devices(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """List the devices the panel can preview."""
+    """List the devices the page can edit."""
     connection.send_result(
         msg["id"],
         [
@@ -238,19 +264,15 @@ def ws_devices(
 
 @ws_decorators.require_admin
 @ws_decorators.websocket_command(
-    {vol.Required("type"): WS_PREVIEW_SUBSCRIBE, vol.Required("device_id"): str}
+    {vol.Required("type"): WS_EDITOR_SUBSCRIBE, vol.Required("device_id"): str}
 )
 @ws_decorators.async_response
 async def ws_subscribe(
     hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """Stream the preview of one device: a snapshot after every digest."""
-    device = _devices(hass).get(msg["device_id"])
+    """Stream one device: a snapshot after every save, profile change, or rename."""
+    device = _device_or_error(hass, connection, msg)
     if device is None:
-        connection.send_error(msg["id"], ws_const.ERR_NOT_FOUND, "Unknown device")
-        return
-    if device.profile is None:
-        connection.send_error(msg["id"], ws_const.ERR_NOT_FOUND, "No profile yet")
         return
 
     def send(payload: dict[str, Any]) -> None:
@@ -262,8 +284,78 @@ async def ws_subscribe(
     await subscription.async_start()
 
 
+@ws_decorators.require_admin
+@ws_decorators.websocket_command(
+    {
+        vol.Required("type"): WS_EDITOR_SAVE,
+        vol.Required("device_id"): str,
+        vol.Required("revision"): int,
+        vol.Required("views"): [dict],
+        vol.Required("snapshot"): vol.Any(None, str),
+    }
+)
+@ws_decorators.async_response
+async def ws_save(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Check and store the views of a device, and publish them."""
+    device = _device_or_error(hass, connection, msg)
+    if device is None:
+        return
+    result = await device.views.async_save(
+        msg["revision"], msg["views"], msg["snapshot"]
+    )
+    if result.conflict:
+        connection.send_result(
+            msg["id"], {"ok": False, "error": "conflict", "revision": result.revision}
+        )
+    elif result.errors:
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": False,
+                "error": "invalid",
+                "errors": [e.as_dict() for e in result.errors],
+            },
+        )
+    else:
+        connection.send_result(
+            msg["id"],
+            {"ok": True, "revision": result.revision, "views": result.views},
+        )
+
+
+# The most entities one render call takes: a draft cannot hold more tiles.
+MAX_RENDER = 64
+
+
+@ws_decorators.require_admin
+@ws_decorators.websocket_command(
+    {
+        vol.Required("type"): WS_EDITOR_RENDER,
+        vol.Required("device_id"): str,
+        vol.Required("entities"): {str: vol.Any(None, str)},
+    }
+)
+@ws_decorators.async_response
+async def ws_render(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Render entities as the device would show them, for tiles not saved yet."""
+    device = _device_or_error(hass, connection, msg)
+    if device is None:
+        return
+    entities: dict[str, str | None] = msg["entities"]
+    if len(entities) > MAX_RENDER:
+        connection.send_error(msg["id"], ws_const.ERR_INVALID_FORMAT, "Too many")
+        return
+    known = {e: i for e, i in entities.items() if viewrules.domain_of(e)}
+    states, icons = await render_states(hass, device, known)
+    connection.send_result(msg["id"], {"states": states, "icons": icons})
+
+
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
     """Register the admin-only websocket commands."""
-    websocket_api.async_register_command(hass, ws_devices)
-    websocket_api.async_register_command(hass, ws_subscribe)
+    for command in (ws_devices, ws_subscribe, ws_save, ws_render):
+        websocket_api.async_register_command(hass, command)

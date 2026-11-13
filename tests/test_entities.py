@@ -15,12 +15,11 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.roundhouse import lovelace_io
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 from custom_components.roundhouse.deviceinfo import find_device
 
 from .conftest import announce, make_entry, vector
-from .test_views import PREFIX, advance, config, save, setup
+from .helpers import PREFIX, advance, config, setup
 
 HOUR = 3600
 
@@ -54,7 +53,7 @@ async def tick(
 
 @pytest.fixture
 async def tender(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> Any:
     entry = await setup(hass, tender_profile, config(("home", [])))
     return entry
@@ -73,7 +72,6 @@ async def test_a_battery_device_gets_every_entity(
     assert state(hass, "binary_sensor", "charging").state == "off"
     assert state(hass, "sensor", "power_mode").state == "sleep"
     assert state(hass, "sensor", "contract_version").state == "1.0"
-    assert state(hass, "sensor", "skipped_cards").state == "0"
     assert state(hass, "sensor", "unread_alerts").state == "0"
     assert entity_id(hass, "notify", "notify") is not None
     assert entity_id(hass, "device_tracker", "presence") is not None
@@ -114,14 +112,14 @@ async def test_battery_entities_appear_only_when_the_device_reports_a_battery(
 
 
 async def test_a_mains_device_without_sleep_omits_what_does_not_apply(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None
+    hass: HomeAssistant, mqtt_mock: Any
 ) -> None:
     wall = vector("announce", "wall-panel")["payload"]
     await setup(
         hass,
         wall,
         config(("home", [])),
-        entry=make_entry(wall, "wall01", "tender-panel"),
+        entry=make_entry(wall, "wall01"),
     )
     async_fire_mqtt_message(
         hass, "roundhouse/wall01/status", json.dumps({"power_mode": "active"})
@@ -135,7 +133,6 @@ async def test_a_mains_device_without_sleep_omits_what_does_not_apply(
         assert entity_id(hass, domain, key, "wall01") is None, key
     for domain, key in (
         ("sensor", "contract_version"),
-        ("sensor", "skipped_cards"),
         ("sensor", "unread_alerts"),
         ("notify", "notify"),
         ("device_tracker", "presence"),
@@ -154,41 +151,17 @@ async def test_a_bad_status_is_ignored(hass: HomeAssistant, tender: Any) -> None
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
-async def test_the_skipped_sensor_carries_the_reasons(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+async def test_the_skipped_cards_sensor_of_an_earlier_version_is_removed(
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
-    cards = [
-        {"type": "tile", "entity": "light.a"},
-        {"type": "markdown", "content": "x"},
-        {"type": "weather-forecast"},
-        {"type": "tile", "entity": "light.b", "visibility": [{"condition": "user"}]},
-    ]
-    await setup(hass, tender_profile, config(("home", cards)))
-    sensor = state(hass, "sensor", "skipped_cards")
-    assert sensor.state == "3"
-    assert sensor.attributes["unsupported type"] == 2
-    assert sensor.attributes["visibility"] == 1
-    await advance(hass, STALE_SETTLE_SECONDS + 1)
-
-
-async def test_the_skipped_sensor_follows_a_dashboard_save(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
-) -> None:
-    await setup(
-        hass, tender_profile, config(("home", [{"type": "markdown", "content": "x"}]))
+    registry = er.async_get(hass)
+    entry = make_entry(tender_profile)
+    entry.add_to_hass(hass)
+    old = registry.async_get_or_create(
+        "sensor", DOMAIN, "tender01_skipped_cards", config_entry=entry
     )
-    assert state(hass, "sensor", "skipped_cards").state == "1"
-    await save(
-        hass,
-        config(("home", [{"type": "markdown"}, {"type": "gauge"}, {"type": "tile"}])),
-    )
-    await advance(hass, lovelace_io.UPDATE_WAIT + 1)
-    sensor = state(hass, "sensor", "skipped_cards")
-    assert sensor.state == "3"
-    assert (sensor.attributes["unsupported type"], sensor.attributes["no entity"]) == (
-        2,
-        1,
-    )
+    await setup(hass, tender_profile, config(("home", [])), entry=entry)
+    assert registry.async_get(old.entity_id) is None
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
@@ -235,7 +208,7 @@ async def test_all_entities_belong_to_the_one_device(
     assert device is not None
     registry = er.async_get(hass)
     mine = [e for e in registry.entities.values() if e.platform == DOMAIN]
-    assert len(mine) == 8 and {e.device_id for e in mine} == {device.id}
+    assert len(mine) == 7 and {e.device_id for e in mine} == {device.id}
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
@@ -299,7 +272,6 @@ async def test_coming_back_inside_the_grace_never_leaves_home(
 async def test_the_grace_is_an_option(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     freezer: FrozenDateTimeFactory,
 ) -> None:

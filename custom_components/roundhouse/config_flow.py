@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from homeassistant.config_entries import (
@@ -14,13 +13,12 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
 
-from . import codec, issues, lovelace_io
+from . import codec, issues
 from .compat import vol
 from .const import (
     CONF_DEVICE_ID,
     CONF_MODEL,
     CONF_PROFILE,
-    CONF_SLUG,
     DEFAULT_ALERT_MAX_AGE_DAYS,
     DEFAULT_ALERT_MAX_COUNT,
     DEFAULT_PRESENCE_GRACE_HOURS,
@@ -28,19 +26,7 @@ from .const import (
     OPT_ALERT_MAX_AGE_DAYS,
     OPT_ALERT_MAX_COUNT,
     OPT_PRESENCE_GRACE_HOURS,
-    OPT_SNAPSHOT_VIEW,
 )
-
-_SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)+$")
-
-
-def unique_slug(slug: str, used: set[str]) -> str:
-    """Return `slug`, or `slug-2`, `slug-3`, ... when it is already used."""
-    candidate, n = slug, 2
-    while candidate in used:
-        candidate = f"{slug}-{n}"
-        n += 1
-    return candidate
 
 
 class RoundhouseConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -98,37 +84,20 @@ class RoundhouseConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the dashboard slug and create the entry."""
+        """Ask the user to confirm the device and create the entry."""
         model = self._profile["model"]
-        default = f"{model.lower()}-panel"
-        errors: dict[str, str] = {}
         if user_input is not None:
-            slug = user_input[CONF_SLUG].strip().lower()
-            if not _SLUG.match(slug):
-                errors[CONF_SLUG] = "invalid_slug"
-            else:
-                used = {
-                    e.data[CONF_SLUG]
-                    for e in self._async_current_entries(include_ignore=False)
-                }
-                slug = unique_slug(slug, used)
-                await lovelace_io.async_ensure_dashboard(
-                    self.hass, slug, model.capitalize()
-                )
-                return self.async_create_entry(
-                    title=f"{model.capitalize()} {self._device_id}",
-                    data={
-                        CONF_DEVICE_ID: self._device_id,
-                        CONF_MODEL: model,
-                        CONF_SLUG: slug,
-                        CONF_PROFILE: self._profile,
-                    },
-                )
+            return self.async_create_entry(
+                title=f"{model.capitalize()} {self._device_id}",
+                data={
+                    CONF_DEVICE_ID: self._device_id,
+                    CONF_MODEL: model,
+                    CONF_PROFILE: self._profile,
+                },
+            )
         return self.async_show_form(
             step_id="confirm",
-            data_schema=vol.Schema({vol.Required(CONF_SLUG, default=default): str}),
             description_placeholders={"model": model, "device_id": self._device_id},
-            errors=errors,
         )
 
 
@@ -141,11 +110,6 @@ class RoundhouseOptionsFlow(OptionsFlow):
             return self.async_create_entry(data=user_input)
         opts = self.config_entry.options
         fields: dict[Any, Any] = {}
-        features = self.config_entry.data[CONF_PROFILE].get("features", [])
-        if "sleep" in features:
-            fields[
-                vol.Optional(OPT_SNAPSHOT_VIEW, default=opts.get(OPT_SNAPSHOT_VIEW, ""))
-            ] = str
         fields[
             vol.Required(
                 OPT_PRESENCE_GRACE_HOURS,

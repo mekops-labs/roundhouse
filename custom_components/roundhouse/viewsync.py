@@ -1,62 +1,115 @@
-"""Keep the published view definition in step with the dashboard."""
+"""Own a device's views: store them, check saves, and publish the definition."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
-from . import digest, issues, layout, lovelace_io
-from .const import CONF_SLUG, OPT_SNAPSHOT_VIEW, store_key
+from . import icons, issues, layout, viewrules
+from .const import store_key
 from .debounce import Debounce
 
 if TYPE_CHECKING:
     from .device import Device
 
 _LOGGER = logging.getLogger(__name__)
-STORE_VERSION = 1
+STORE_VERSION = 2
+
+# Wait for further registry changes before publishing a renamed entity again.
+NAME_WAIT = 2.0
+
+STARTER_TITLE = "Home"
+
+
+class _ViewStore(Store[dict[str, Any]]):
+    """The views of one device; the first store version held a digest."""
+
+    async def _async_migrate_func(
+        self,
+        old_major_version: int,
+        old_minor_version: int,
+        old_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Drop the digest of the first version: views are authored now."""
+        return {}
+
+
+@dataclass
+class SaveResult:
+    """The outcome of a save: the new state, a conflict, or the broken rules."""
+
+    revision: int
+    views: list[dict[str, Any]] = field(default_factory=list)
+    conflict: bool = False
+    errors: list[viewrules.RuleError] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        """Return whether the save was stored."""
+        return not self.conflict and not self.errors
+
+
+def _tile(raw: Any) -> Any:
+    """Keep the fields of a tile that Roundhouse stores; leave the rest to checks."""
+    if not isinstance(raw, Mapping):
+        return raw
+    tile = {k: raw[k] for k in ("entity_id", "name", "icon", "controls") if k in raw}
+    return {k: v for k, v in tile.items() if v is not None and v != ""}
+
+
+def _view(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the stored shape of a view, with a path for a new one."""
+    tiles = raw.get("tiles")
+    path = raw.get("path")
+    return {
+        "path": uuid.uuid4().hex[:8] if path is None else path,
+        "title": raw.get("title"),
+        "layout": raw.get("layout"),
+        "tiles": [_tile(t) for t in tiles] if isinstance(tiles, list) else tiles,
+    }
 
 
 class ViewSync:
-    """Digest the device's dashboard and hand the result to the device."""
+    """Store the device's views and keep the published definition in step."""
 
     def __init__(self, hass: HomeAssistant, device: Device) -> None:
         """Initialize the sync."""
         self._hass = hass
         self._device = device
-        self._slug: str = device.entry.data[CONF_SLUG]
-        self._store: Store[dict[str, Any]] = Store(
+        self._store: Store[dict[str, Any]] = _ViewStore(
             hass, STORE_VERSION, store_key(device.device_id, "views")
         )
-        self._last_good: dict[str, dict[str, Any]] = {}
         self._overflowing: set[str] = set()
         self._entities: frozenset[str] = frozenset()
         self._lock = asyncio.Lock()
-        self._debounce = Debounce(hass, lovelace_io.UPDATE_WAIT, self.async_refresh)
+        self._debounce = Debounce(hass, NAME_WAIT, self.async_refresh)
         self._unsubs: list[CALLBACK_TYPE] = []
         self._stopped = False
-        self.last_digest: digest.DigestResult | None = None
-        self.last_overflows: list[layout.Overflow] = []
-        # `config`, `strategy`, or `missing`; None before the first digest.
-        self.dashboard_state: str | None = None
+        self.revision = 0
+        self.views: list[dict[str, Any]] = []
+        self.snapshot: str | None = None
+        self.overflows: list[layout.Overflow] = []
 
     async def async_start(self) -> None:
-        """Load the stored definitions, publish, and watch for changes."""
-        stored = await self._store.async_load()
+        """Load the stored views, publish, and follow entity renames."""
+        data = await self._store.async_load() or {}
         profile = self._device.profile
-        if (
-            stored
-            and profile
-            and stored.get("fingerprint") == layout.profile_fingerprint(profile)
-        ):
-            self._last_good = {v["path"]: v for v in stored["views"]}
-        self._unsubs.append(
-            lovelace_io.async_watch(self._hass, self._slug, self._debounce)
-        )
+        if "views" in data:
+            self.revision = int(data["revision"])
+            self.views = list(data["views"])
+            self.snapshot = data.get("snapshot")
+        elif profile:
+            self.revision = 1
+            self.views = [self._starter(profile)]
+            await self._save()
         self._unsubs.append(
             self._hass.bus.async_listen(
                 er.EVENT_ENTITY_REGISTRY_UPDATED, self._on_registry_update
@@ -72,98 +125,125 @@ class ViewSync:
         while self._unsubs:
             self._unsubs.pop()()
 
-    @callback
-    def _on_registry_update(
-        self, event: Event[er.EventEntityRegistryUpdatedData]
-    ) -> None:
-        ids = {event.data.get("entity_id"), event.data.get("old_entity_id")}
-        if ids & self._entities:
-            self._debounce.trigger()
+    @staticmethod
+    def _starter(profile: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "path": uuid.uuid4().hex[:8],
+            "title": STARTER_TITLE,
+            "layout": layout.densest(profile),
+            "tiles": [],
+        }
+
+    async def _save(self) -> None:
+        await self._store.async_save(
+            {
+                "revision": self.revision,
+                "views": self.views,
+                "snapshot": self.snapshot,
+            }
+        )
 
     def _friendly_name(self, entity_id: str) -> str | None:
         state = self._hass.states.get(entity_id)
         return state.name if state else None
 
     async def async_refresh(self) -> None:
-        """Digest the dashboard again and publish what changed."""
+        """Publish the stored views again, for a changed profile or name."""
         async with self._lock:
-            device = self._device
-            if self._stopped or device.profile is None:
-                return
-            try:
-                await self._refresh(device.profile)
-            except Exception:
-                _LOGGER.exception("Digest of %s failed", self._slug)
-            await device.async_publish_all()
+            await self._publish()
 
-    async def _refresh(self, profile: dict[str, Any]) -> None:
+    async def _publish(self) -> None:
         device = self._device
-        state = await lovelace_io.async_load_dashboard(self._hass, self._slug)
-        issues.clear_dashboard_issues(self._hass, device.device_id)
-        self.dashboard_state = state.kind
-        if state.config is not None and digest.is_strategy(state.config):
-            self.dashboard_state = "strategy"
-        if (
-            state.kind != "config"
-            or state.config is None
-            or digest.is_strategy(state.config)
-        ):
-            kind = "deleted" if state.kind == "missing" else "strategy"
-            issues.raise_dashboard_issue(self._hass, device.device_id, kind)
-            self._reset()
-            device.set_views(dict(layout.EMPTY_VIEWS), {}, {})
+        profile = device.profile
+        if self._stopped or profile is None:
             return
-
-        result = digest.digest(state.config, self._friendly_name)
-        published, overflows = layout.merge(result.views, self._last_good, profile)
-        self._last_good = {v["path"]: v for v in published}
-        self._sync_overflow_issues(overflows, profile)
-        self.last_digest, self.last_overflows = result, overflows
-        self._entities = frozenset(t.entity_id for v in result.views for t in v.tiles)
-        option = device.entry.options.get(OPT_SNAPSHOT_VIEW, "")
-        card_icons = {
-            t.entity_id: t.icon for v in result.views for t in v.tiles if t.icon
-        }
+        published, self.overflows = layout.fit(self.views, profile, self._friendly_name)
+        self._sync_overflow_issues()
+        self._entities = frozenset(
+            t["entity_id"] for v in self.views for t in v["tiles"]
+        )
+        icon_overrides: dict[str, str] = {}
+        for view in self.views:
+            for tile in view["tiles"]:
+                if tile.get("icon"):
+                    icon_overrides.setdefault(tile["entity_id"], tile["icon"])
         device.set_views(
             {
                 "views": published,
-                "snapshot_view": layout.snapshot_view(published, profile, option),
-                "skipped": result.skipped_total,
+                "snapshot_view": layout.snapshot_view(
+                    published, profile, self.snapshot
+                ),
+                "skipped": 0,
             },
-            card_icons,
-            result.skipped,
+            icon_overrides,
         )
-        if self._stopped:  # a newer runtime owns the store now
-            return
-        await self._store.async_save(
-            {
-                "fingerprint": layout.profile_fingerprint(profile),
-                "views": published,
-            }
-        )
+        await device.async_publish_all()
 
-    def _reset(self) -> None:
-        for path in self._overflowing:
-            issues.clear_overflow(self._hass, self._device.device_id, path)
-        self._overflowing.clear()
-        self._last_good = {}
-        self._entities = frozenset()
-        self.last_digest, self.last_overflows = None, []
+    async def async_save(
+        self,
+        revision: int,
+        views: Sequence[Mapping[str, Any]],
+        snapshot: str | None,
+    ) -> SaveResult:
+        """Check the views and, when every rule holds, store and publish them."""
+        profile = self._device.profile
+        if profile is None:
+            raise ValueError("The device has no profile yet")
+        await self._hass.async_add_executor_job(icons.warm)
+        async with self._lock:
+            if revision != self.revision:
+                return SaveResult(self.revision, conflict=True)
+            candidate = [_view(v) for v in views]
+            errors = viewrules.validate(
+                candidate, snapshot, profile, icon_known=icons.known
+            )
+            if errors:
+                return SaveResult(self.revision, errors=errors)
+            self.revision += 1
+            self.views, self.snapshot = candidate, snapshot
+            await self._save()
+            await self._publish()
+            return SaveResult(self.revision, views=self.views)
 
-    def _sync_overflow_issues(
-        self, overflows: list[layout.Overflow], profile: dict[str, Any]
+    @callback
+    def _on_registry_update(
+        self, event: Event[er.EventEntityRegistryUpdatedData]
     ) -> None:
-        now = {o.path for o in overflows}
+        old = event.data.get("old_entity_id")
+        new = event.data["entity_id"]
+        if old and old != new and old in self._entities:
+            self._device.entry.async_create_background_task(
+                self._hass,
+                self._async_rename(old, new),
+                f"roundhouse rename {self._device.device_id}",
+            )
+        elif new in self._entities:
+            self._debounce.trigger()
+
+    async def _async_rename(self, old: str, new: str) -> None:
+        """Follow an entity whose ID changed: its tiles take the new ID."""
+        async with self._lock:
+            for view in self.views:
+                for tile in view["tiles"]:
+                    if tile["entity_id"] == old:
+                        tile["entity_id"] = new
+            self.revision += 1
+            await self._save()
+            await self._publish()
+
+    def _sync_overflow_issues(self) -> None:
+        device_id = self._device.device_id
+        now = {o.path for o in self.overflows}
         for path in self._overflowing - now:
-            issues.clear_overflow(self._hass, self._device.device_id, path)
-        for o in overflows:
+            issues.clear_overflow(self._hass, device_id, path)
+        for o in self.overflows:
             issues.raise_overflow(
                 self._hass,
-                self._device.device_id,
+                device_id,
                 o.path,
                 o.title,
                 o.excess,
                 o.capacity,
-                kept=o.kept,
+                layout_gone=o.layout_gone,
             )
         self._overflowing = now

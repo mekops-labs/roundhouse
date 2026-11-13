@@ -81,25 +81,6 @@ def overflow_issue_id(device_id: str, path: str) -> str:
     return f"{_overflow_prefix(device_id)}{_slug(path)}.{digest}"
 
 
-def raise_dashboard_issue(hass: HomeAssistant, device_id: str, kind: str) -> None:
-    """Raise a repair issue for a `strategy` or `deleted` dashboard."""
-    ir.async_create_issue(
-        hass,
-        DOMAIN,
-        f"{kind}_{device_id}",
-        is_fixable=False,
-        severity=ir.IssueSeverity.WARNING,
-        translation_key=f"dashboard_{kind}",
-        translation_placeholders={"device": device_id},
-    )
-
-
-def clear_dashboard_issues(hass: HomeAssistant, device_id: str) -> None:
-    """Remove the strategy and deleted-dashboard issues of a device."""
-    for kind in ("strategy", "deleted"):
-        ir.async_delete_issue(hass, DOMAIN, f"{kind}_{device_id}")
-
-
 def raise_overflow(
     hass: HomeAssistant,
     device_id: str,
@@ -108,25 +89,34 @@ def raise_overflow(
     excess: int,
     capacity: int,
     *,
-    kept: bool,
+    layout_gone: bool,
 ) -> None:
-    """Raise a repair issue and a notification for a view that does not fit.
+    """Raise a repair issue and a notification for a view the device cannot show.
 
-    `kept` tells whether the device keeps an earlier version that fitted.
+    `layout_gone` tells that the view's layout is no longer in the profile.
     """
     issue_id = overflow_issue_id(device_id, path)
-    outcome = (
-        "The device keeps the last version that fitted."
-        if kept
-        else "The device does not show this view."
-    )
+    if layout_gone:
+        key = "view_layout_gone"
+        text = (
+            f"View '{title}' cannot be shown on {device_id}: its layout is no "
+            "longer offered. Open the Roundhouse page and choose another layout. "
+            "The device does not show this view."
+        )
+    else:
+        key = "view_overflow"
+        text = (
+            f"View '{title}' does not fit on {device_id}: remove {excess} "
+            f"tile(s), its layout holds {capacity}. The device does not show "
+            "this view."
+        )
     ir.async_create_issue(
         hass,
         DOMAIN,
         issue_id,
         is_fixable=False,
         severity=ir.IssueSeverity.ERROR,
-        translation_key="view_overflow" if kept else "view_overflow_hidden",
+        translation_key=key,
         translation_placeholders={
             "device": device_id,
             "view": title,
@@ -135,18 +125,13 @@ def raise_overflow(
         },
     )
     persistent_notification.async_create(
-        hass,
-        f"View '{title}' does not fit on {device_id}: remove {excess} tile(s), "
-        f"the densest layout holds {capacity}. {outcome}",
-        title="Roundhouse: view too large",
-        notification_id=issue_id,
+        hass, text, title="Roundhouse: view too large", notification_id=issue_id
     )
 
 
 def clear_device_issues(hass: HomeAssistant, device_id: str) -> None:
     """Remove every issue and notification of a removed device."""
     clear_profile_issue(hass, device_id)
-    clear_dashboard_issues(hass, device_id)
     prefix = _overflow_prefix(device_id)
     for domain, issue_id in list(ir.async_get(hass).issues):
         if domain == DOMAIN and issue_id.startswith(prefix):

@@ -36,7 +36,7 @@ from custom_components.roundhouse.const import (
 from custom_components.roundhouse.deviceinfo import find_device
 
 from .conftest import announce, vector
-from .test_views import PREFIX, advance, config, setup
+from .helpers import PREFIX, advance, config, setup
 
 DAY = 86400
 GATE = {
@@ -91,7 +91,7 @@ class Camera:
 
 @pytest.fixture
 async def device(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> Any:
     entry = await setup(hass, tender_profile, config(("home", [])))
     await advance(hass, STALE_SETTLE_SECONDS + 1)
@@ -200,12 +200,12 @@ async def test_a_camera_snapshot_is_attached_within_the_budget(
 
 
 async def test_the_wall_panel_gets_rgb565_images(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None
+    hass: HomeAssistant, mqtt_mock: Any
 ) -> None:
     from .conftest import make_entry
 
     wall = vector("announce", "wall-panel")["payload"]
-    entry = make_entry(wall, "tender01", "tender-panel")
+    entry = make_entry(wall, "tender01")
     await setup(hass, wall, config(("home", [])), entry=entry)
     mqtt_mock.async_publish.reset_mock()
     with Camera().patched():
@@ -263,7 +263,7 @@ async def test_a_slow_snapshot_does_not_hold_the_alert_back(
 
 
 async def test_an_image_that_cannot_fit_the_payload_limit_shrinks(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     profile = json.loads(json.dumps(tender_profile))
     profile["limits"]["max_payload"] = 20000
@@ -481,12 +481,12 @@ async def test_a_target_is_required_and_must_be_a_roundhouse_device(
 
 
 async def test_two_devices_each_get_the_alert(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     from .conftest import make_entry
 
     await setup(hass, tender_profile, config(("home", [])))
-    second = make_entry(tender_profile, "tender02", "tender-panel-2")
+    second = make_entry(tender_profile, "tender02")
     second.add_to_hass(hass)
     assert await hass.config_entries.async_setup(second.entry_id)
     await hass.async_block_till_done()
@@ -499,12 +499,12 @@ async def test_two_devices_each_get_the_alert(
 
 
 async def test_two_devices_share_one_snapshot_fetch(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     from .conftest import make_entry
 
     await setup(hass, tender_profile, config(("home", [])))
-    second = make_entry(tender_profile, "tender02", "tender-panel-2")
+    second = make_entry(tender_profile, "tender02")
     second.add_to_hass(hass)
     assert await hass.config_entries.async_setup(second.entry_id)
     await hass.async_block_till_done()
@@ -528,12 +528,12 @@ async def test_two_devices_share_one_snapshot_fetch(
 
 
 async def test_slow_snapshots_on_two_devices_wait_once(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     from .conftest import make_entry
 
     await setup(hass, tender_profile, config(("home", [])))
-    second = make_entry(tender_profile, "tender02", "tender-panel-2")
+    second = make_entry(tender_profile, "tender02")
     second.add_to_hass(hass)
     assert await hass.config_entries.async_setup(second.entry_id)
     await hass.async_block_till_done()
@@ -612,7 +612,6 @@ def clock() -> Any:
 async def test_alerts_age_out_by_count_and_lose_their_topics(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     clock: Any,
 ) -> None:
@@ -643,7 +642,6 @@ async def test_alerts_age_out_by_count_and_lose_their_topics(
 async def test_the_newest_alert_is_kept_when_alerts_share_a_second(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     clock: Any,
 ) -> None:
@@ -690,7 +688,7 @@ async def test_alerts_age_out_by_time_and_an_expired_action_is_denied(
 
 
 async def test_alerts_survive_a_restart_with_their_images_and_flags(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     entry = await setup(hass, tender_profile, config(("home", [])))
     with Camera().patched():
@@ -743,7 +741,6 @@ async def test_alerts_survive_a_restart_with_their_images_and_flags(
 async def test_an_alert_that_expired_while_offline_is_dropped_at_startup(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     clock: Any,
 ) -> None:
@@ -800,7 +797,6 @@ async def test_a_meta_only_device_gets_no_alert_images(
 async def test_stored_images_the_new_profile_cannot_take_are_dropped(
     hass: HomeAssistant,
     mqtt_mock: Any,
-    lovelace: None,
     tender_profile: dict[str, Any],
     change: dict[str, Any],
     dropped: str,
@@ -840,7 +836,7 @@ async def test_stored_images_the_new_profile_cannot_take_are_dropped(
 
 
 async def test_a_snapshot_done_just_after_the_wait_is_not_overwritten(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     from .conftest import make_entry
 
@@ -881,7 +877,7 @@ async def test_a_reconnect_republishes_alerts(
 
 
 async def test_an_oversized_alert_is_not_published(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     profile = json.loads(json.dumps(tender_profile))
     profile["limits"]["max_payload"] = 300

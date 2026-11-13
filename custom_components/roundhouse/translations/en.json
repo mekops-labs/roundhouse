@@ -4,17 +4,8 @@
     "step": {
       "confirm": {
         "title": "Add {model}",
-        "description": "Roundhouse found {model} ({device_id}). Choose the URL path of its dashboard. An existing dashboard with this path is used as it is.",
-        "data": {
-          "slug": "Dashboard URL path"
-        },
-        "data_description": {
-          "slug": "Lowercase letters, digits, and at least one hyphen."
-        }
+        "description": "Roundhouse found {model} ({device_id}). Confirm to add it. You build its views in the Roundhouse page in the sidebar."
       }
-    },
-    "error": {
-      "invalid_slug": "Use lowercase letters and digits with at least one hyphen, for example tender-panel."
     },
     "abort": {
       "already_configured": "This device is already configured.",
@@ -29,13 +20,11 @@
       "init": {
         "title": "Roundhouse options",
         "data": {
-          "snapshot_view": "Snapshot view",
           "presence_grace_hours": "Presence grace (hours)",
           "alert_max_count": "Maximum stored alerts",
           "alert_max_age_days": "Maximum alert age (days)"
         },
         "data_description": {
-          "snapshot_view": "View a sleeping device refreshes. Leave empty for the first view.",
           "presence_grace_hours": "How long an offline device still counts as home."
         }
       }
@@ -54,21 +43,13 @@
       "title": "The MQTT birth message is disabled",
       "description": "Devices learn that Home Assistant is up from the birth message on homeassistant/status. Enable it in the MQTT integration options."
     },
-    "dashboard_strategy": {
-      "title": "The dashboard of {device} is auto-generated",
-      "description": "The dashboard of {device} has no cards of its own, so Roundhouse has nothing to show. Open the dashboard, choose Edit, and take control. Until then the device shows nothing."
-    },
-    "dashboard_deleted": {
-      "title": "The dashboard of {device} was deleted",
-      "description": "The dashboard of {device} no longer exists. The device shows nothing until you create a dashboard with the same URL path."
-    },
     "view_overflow": {
       "title": "View {view} does not fit on {device}",
-      "description": "The view {view} has too many tiles for {device}: remove {excess}. The densest layout holds {capacity}. The device keeps the last version that fitted."
+      "description": "The view {view} has too many tiles for {device}: remove {excess}. Its layout holds {capacity}. The device does not show this view."
     },
-    "view_overflow_hidden": {
-      "title": "View {view} does not fit on {device}",
-      "description": "The view {view} has too many tiles for {device}: remove {excess}. The densest layout holds {capacity}. The device does not show this view."
+    "view_layout_gone": {
+      "title": "View {view} has no layout on {device}",
+      "description": "The layout of the view {view} is no longer offered by {device}. Open the Roundhouse page and choose another layout. The device does not show this view."
     }
   },
   "services": {
@@ -133,9 +114,6 @@
     "sensor": {
       "contract_version": {
         "name": "Contract version"
-      },
-      "skipped_cards": {
-        "name": "Skipped cards"
       },
       "unread_alerts": {
         "name": "Unread alerts"

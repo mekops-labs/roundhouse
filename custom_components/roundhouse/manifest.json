@@ -12,7 +12,6 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "lovelace",
     "mqtt",
     "persistent_notification"
   ],

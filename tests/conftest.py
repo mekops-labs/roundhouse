@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 from homeassistant.core import HomeAssistant
-from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_mqtt_message,
@@ -21,7 +20,6 @@ from custom_components.roundhouse.const import (
     CONF_DEVICE_ID,
     CONF_MODEL,
     CONF_PROFILE,
-    CONF_SLUG,
     DOMAIN,
 )
 
@@ -44,15 +42,6 @@ def tender_profile() -> dict[str, Any]:
     return vector("announce", "tender")["payload"]  # type: ignore[no-any-return]
 
 
-@pytest.fixture
-async def lovelace(hass: HomeAssistant) -> None:
-    """Set up Lovelace the way a real instance has it."""
-    hass.config.components.update(
-        {"http", "auth", "onboarding", "websocket_api", "frontend", "api"}
-    )
-    assert await async_setup_component(hass, "lovelace", {})
-
-
 def announce(
     hass: HomeAssistant, device_id: str, payload: dict[str, Any] | bytes
 ) -> None:
@@ -65,9 +54,7 @@ def announce(
     async_fire_mqtt_message(hass, f"roundhouse/{device_id}/announce", body)
 
 
-def make_entry(
-    profile: dict[str, Any], device_id: str = "tender01", slug: str = "tender-panel"
-) -> MockConfigEntry:
+def make_entry(profile: dict[str, Any], device_id: str = "tender01") -> MockConfigEntry:
     """Build a configured entry."""
     return MockConfigEntry(
         domain=DOMAIN,
@@ -76,7 +63,6 @@ def make_entry(
         data={
             CONF_DEVICE_ID: device_id,
             CONF_MODEL: profile["model"],
-            CONF_SLUG: slug,
             CONF_PROFILE: profile,
         },
     )

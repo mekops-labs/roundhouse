@@ -1,4 +1,4 @@
-"""Choose layouts, handle overflow, and build the `views` payload.
+"""Fit stored views to a profile and build the `views` payload.
 
 Pure functions with no Home Assistant imports.
 """
@@ -7,29 +7,29 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .digest import DigestView
+from .viewrules import resolve_tile
 
 EMPTY_VIEWS: dict[str, Any] = {"views": [], "snapshot_view": None, "skipped": 0}
 
 
 @dataclass(frozen=True)
 class Overflow:
-    """A view with more tiles than the densest layout holds."""
+    """A view the device's profile can no longer show."""
 
     path: str
     title: str
     tiles: int
-    capacity: int
-    kept: bool = False  # the device keeps an earlier version that fitted
+    capacity: int  # the slots of the view's layout; of the densest if it is gone
+    layout_gone: bool = False
 
     @property
     def excess(self) -> int:
         """Return how many tiles to remove."""
-        return self.tiles - self.capacity
+        return max(0, self.tiles - self.capacity)
 
 
 def densest(profile: Mapping[str, Any]) -> int:
@@ -43,64 +43,54 @@ def capacity(profile: Mapping[str, Any]) -> int:
     return len(profile["layouts"][densest(profile)]["slots"])
 
 
-def choose_layout(profile: Mapping[str, Any], tiles: int) -> int | None:
-    """Return the first layout with enough slots, or None when none has."""
-    for index, layout in enumerate(profile["layouts"]):
-        if len(layout["slots"]) >= tiles:
-            return index
-    return None
-
-
-def profile_fingerprint(profile: Mapping[str, Any]) -> str:
-    """Return a hash of what a stored view definition depends on."""
-    blob = json.dumps(
-        [profile["display"], profile["layouts"]], sort_keys=True, separators=(",", ":")
-    )
-    return hashlib.sha256(blob.encode()).hexdigest()[:16]
-
-
-def merge(
-    views: Sequence[DigestView],
-    last_good: Mapping[str, dict[str, Any]],
+def fit(
+    views: Sequence[Mapping[str, Any]],
     profile: Mapping[str, Any],
+    friendly_name: Callable[[str], str | None],
 ) -> tuple[list[dict[str, Any]], list[Overflow]]:
-    """Return the views to publish and the views held back.
+    """Return the views to publish and the views the profile cannot show.
 
-    A view that fits is published as digested. A view that overflows keeps its
-    last definition that fitted, or is left out when it never fitted.
+    A view fits when its layout exists and has a slot for every tile. A view
+    that does not fit is left out.
     """
+    layouts = profile["layouts"]
     published: list[dict[str, Any]] = []
     overflows: list[Overflow] = []
-    cap = capacity(profile)
     for view in views:
-        layout = choose_layout(profile, len(view.tiles))
-        if layout is None:
-            kept = view.path in last_good
+        tiles = view["tiles"]
+        index = view["layout"]
+        if not 0 <= index < len(layouts):
             overflows.append(
-                Overflow(view.path, view.title, len(view.tiles), cap, kept)
+                Overflow(
+                    view["path"], view["title"], len(tiles), capacity(profile), True
+                )
             )
-            if kept:
-                published.append(last_good[view.path])
+            continue
+        slots = len(layouts[index]["slots"])
+        if len(tiles) > slots:
+            overflows.append(Overflow(view["path"], view["title"], len(tiles), slots))
             continue
         published.append(
             {
-                "path": view.path,
-                "title": view.title,
-                "layout": layout,
-                "tiles": [t.as_dict() for t in view.tiles],
+                "path": view["path"],
+                "title": view["title"],
+                "layout": index,
+                "tiles": [resolve_tile(t, friendly_name) for t in tiles],
             }
         )
     return published, overflows
 
 
 def snapshot_view(
-    published: Sequence[Mapping[str, Any]], profile: Mapping[str, Any], option: str
+    published: Sequence[Mapping[str, Any]],
+    profile: Mapping[str, Any],
+    chosen: str | None,
 ) -> str | None:
     """Return the view a sleeping device refreshes, or None for other devices."""
     if "sleep" not in profile.get("features", []) or not published:
         return None
     paths = [v["path"] for v in published]
-    return option if option in paths else paths[0]
+    return chosen if chosen in paths else paths[0]
 
 
 def definition_hash(payload: Mapping[str, Any]) -> str:

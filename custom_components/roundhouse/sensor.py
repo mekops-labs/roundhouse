@@ -1,19 +1,28 @@
-"""Sensors of a panel: battery, power mode, contract version, skipped cards, unread."""
+"""Sensors of a panel: battery, power mode, contract version, unread alerts."""
 
 from __future__ import annotations
-
-from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, alerts_signal, status_signal, views_signal
+from .const import DOMAIN, alerts_signal, status_signal
 from .device import Device
 from .entity import RoundhouseEntity
+
+
+def _remove_skipped_cards(hass: HomeAssistant, device_id: str) -> None:
+    """Remove the skipped-cards sensor that an earlier version added."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{device_id}_skipped_cards"
+    )
+    if entity_id:
+        registry.async_remove(entity_id)
 
 
 async def async_setup_entry(
@@ -21,9 +30,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up the sensors the device supports."""
     device: Device = hass.data[DOMAIN][entry.entry_id]
+    _remove_skipped_cards(hass, device.device_id)
     entities: list[RoundhouseEntity] = [
         ContractVersion(entry, device),
-        SkippedCards(entry, device),
         UnreadAlerts(entry, device),
     ]
     if "sleep" in (device.profile or {}).get("features", []):
@@ -61,28 +70,6 @@ class ContractVersion(RoundhouseEntity, SensorEntity):
         """Return the announced version."""
         value = (self._device.profile or {}).get("contract")
         return str(value) if value else None
-
-
-class SkippedCards(RoundhouseEntity, SensorEntity):
-    """The cards and features the digest skipped, with the reasons."""
-
-    _attr_translation_key = "skipped_cards"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, entry: ConfigEntry, device: Device) -> None:
-        """Initialize the sensor."""
-        super().__init__(entry, device, "skipped_cards", views_signal(device.device_id))
-
-    @property
-    def native_value(self) -> int | None:
-        """Return how many were skipped."""
-        payload = self._device.views_payload
-        return int(payload["skipped"]) if payload else None
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the skip reasons and their counts."""
-        return dict(self._device.skipped_reasons)
 
 
 class UnreadAlerts(RoundhouseEntity, SensorEntity):

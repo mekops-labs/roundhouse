@@ -54,7 +54,6 @@ class Device:
         self.alerts = AlertManager(hass, self)
         self.presence = PresenceManager(hass, self)
         self.status: dict[str, Any] | None = None
-        self.skipped_reasons: dict[str, int] = {}
         self.card_icons: dict[str, str] = {}
         self._was_connected = True
 
@@ -114,15 +113,11 @@ class Device:
             self._unsubs.pop()()
 
     def set_views(
-        self,
-        payload: dict[str, Any],
-        card_icons: dict[str, str] | None = None,
-        skipped_reasons: dict[str, int] | None = None,
+        self, payload: dict[str, Any], icon_overrides: dict[str, str] | None = None
     ) -> None:
         """Set the `views` payload the next publish sends."""
         self.views_payload = payload
-        self.card_icons = card_icons or {}
-        self.skipped_reasons = dict(skipped_reasons or {})
+        self.card_icons = icon_overrides or {}
         async_dispatcher_send(self._hass, views_signal(self.device_id))
 
     def tiles_for(self, entity_id: str) -> list[dict[str, Any]]:

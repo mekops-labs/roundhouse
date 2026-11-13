@@ -58,12 +58,13 @@ async def test_setup_publishes_meta_retained(
     assert len(meta) == 1
     _, payload, qos, retain = meta[0]
     assert (qos, retain) == (1, True)
+    # A new device holds one empty view, "Home".
+    assert device.views_payload is not None
     assert json.loads(payload) == {
         "contract": "1.0",
         "language": hass.config.language,
-        "views_hash": layout.definition_hash(layout.EMPTY_VIEWS),
+        "views_hash": layout.definition_hash(device.views_payload),
     }
-    # No dashboard exists yet, so the device holds an empty view definition.
     assert device.publisher.owned == {"meta", "views"}
     await _settle(hass)
 
@@ -278,13 +279,13 @@ async def test_removing_a_device_clears_its_topics_stores_and_issues(
         hass, 1, f"roundhouse.tender01.alert_{alert_id}"
     )
     await image.async_save({"format": "gray4"})
-    issues.raise_dashboard_issue(hass, "tender01", "deleted")
+    issues.raise_profile_issue(hass, "tender01", "profile_invalid", "x")
     # The removed device's view `x-home` and another device `tender01_x`'s view
     # `home` once shared one issue ID; the other device keeps its issue.
     mine = issues.overflow_issue_id("tender01", "x-home")
     theirs = issues.overflow_issue_id("tender01_x", "home")
     assert mine != theirs
-    make_entry(tender_profile, "tender01_x", "x").add_to_hass(hass)
+    make_entry(tender_profile, "tender01_x").add_to_hass(hass)
     for issue_id in (mine, theirs):
         ir.async_create_issue(
             hass,
@@ -322,6 +323,6 @@ async def test_removing_a_device_clears_its_topics_stores_and_issues(
     assert PREFIX + "status" not in cleared  # the device's own topic
     assert not {k for k in hass_storage if k.startswith("roundhouse.tender01.")}
     registry = ir.async_get(hass)
-    assert registry.async_get_issue(DOMAIN, "deleted_tender01") is None
+    assert registry.async_get_issue(DOMAIN, "profile_tender01") is None
     assert registry.async_get_issue(DOMAIN, mine) is None
     assert registry.async_get_issue(DOMAIN, theirs) is not None

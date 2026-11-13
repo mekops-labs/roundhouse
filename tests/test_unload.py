@@ -3,23 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 
 from homeassistant.components.mqtt.const import MQTT_CONNECTION_STATE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
-from custom_components.roundhouse import lovelace_io
 from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 from custom_components.roundhouse.publisher import RETRY_SECONDS
 from custom_components.roundhouse.statesync import StateSync
+from custom_components.roundhouse.viewsync import ViewSync
 
-from .test_views import advance, config, save, setup
+from .helpers import advance, config, setup
 
 
 class Stuck:
@@ -39,7 +37,7 @@ class Stuck:
 
 
 async def test_a_send_that_fails_after_stop_is_not_retried(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     entry = await setup(hass, tender_profile, config(("home", [])))
     await advance(hass, STALE_SETTLE_SECONDS + 1)
@@ -62,7 +60,7 @@ async def test_a_send_that_fails_after_stop_is_not_retried(
 
 
 async def test_a_stopped_publisher_sends_nothing(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     entry = await setup(hass, tender_profile, config(("home", [])))
     await advance(hass, STALE_SETTLE_SECONDS + 1)
@@ -75,19 +73,21 @@ async def test_a_stopped_publisher_sends_nothing(
     assert not mqtt_mock.async_publish.call_args_list
 
 
-async def test_unloading_cancels_a_dashboard_refresh_in_progress(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+async def test_unloading_cancels_a_rename_in_progress(
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
-    hass.states.async_set("light.l0", "on")
-    entry = await setup(hass, tender_profile, config(("home", [])))
+    registry = er.async_get(hass)
+    reg_entry = registry.async_get_or_create(
+        "light", "test", "l0", suggested_object_id="l0"
+    )
+    hass.states.async_set(reg_entry.entity_id, "on")
+    entry = await setup(
+        hass, tender_profile, config(("home", [{"entity_id": "light.l0"}]))
+    )
     await advance(hass, STALE_SETTLE_SECONDS + 1)
     stuck = Stuck()
-    with patch.object(lovelace_io, "async_load_dashboard", stuck):
-        await save(hass, config(("home", [{"type": "tile", "entity": "light.l0"}])))
-        # Fire the debounce without waiting on the refresh, which never ends.
-        async_fire_time_changed(
-            hass, dt_util.utcnow() + timedelta(seconds=lovelace_io.UPDATE_WAIT + 1)
-        )
+    with patch.object(ViewSync, "_save", stuck):
+        registry.async_update_entity(reg_entry.entity_id, new_entity_id="light.porch")
         async with asyncio.timeout(5):
             await stuck.entered.wait()
         assert await hass.config_entries.async_unload(entry.entry_id)
@@ -97,11 +97,11 @@ async def test_unloading_cancels_a_dashboard_refresh_in_progress(
 
 
 async def test_unloading_cancels_a_state_publish_in_progress(
-    hass: HomeAssistant, mqtt_mock: Any, lovelace: None, tender_profile: dict[str, Any]
+    hass: HomeAssistant, mqtt_mock: Any, tender_profile: dict[str, Any]
 ) -> None:
     hass.states.async_set("light.l0", "on")
     entry = await setup(
-        hass, tender_profile, config(("home", [{"type": "tile", "entity": "light.l0"}]))
+        hass, tender_profile, config(("home", [{"entity_id": "light.l0"}]))
     )
     await advance(hass, STALE_SETTLE_SECONDS + 1)
     stuck = Stuck()
