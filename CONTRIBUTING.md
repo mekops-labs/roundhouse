@@ -59,8 +59,8 @@ the end. It writes `report.json` to the soak directory.
 
 ## Confidentiality
 
-This repository is private until its first release. Do not write internal
-planning data into code, comments, commit messages, docs, or configuration:
+This repository is public. Do not write internal planning data into code,
+comments, commit messages, docs, or configuration:
 
 - No milestone labels, phase numbers, or sprint items.
 - No internal spec or section references.
