@@ -396,7 +396,7 @@ def build_views(
 def save_views(
     device_id: str, views: list[dict[str, object]], snapshot: str | None = None
 ) -> dict[str, object]:
-    """Save a device's views through the editor command; retry once on a stale revision."""
+    """Save a device's views through the editor command; on a stale revision, retry with the current one (3 tries in all)."""
     revision = 1
     reply: dict[str, object] = {}
     for _ in range(3):
