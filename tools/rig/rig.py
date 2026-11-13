@@ -40,8 +40,17 @@ MQTT_PORT = int(os.environ.get("RIG_MQTT_PORT", 18830))
 HA_NAME, MQTT_NAME = f"{PREFIX}-ha", f"{PREFIX}-mqtt"
 # With RIG_ACL=1 the broker needs a login and applies the documented ACL.
 ACL = os.environ.get("RIG_ACL") == "1"
-# Broker logins; `credentials()` generates their passwords.
-BROKER_USERS = ("homeassistant", "tender01", "tender02", "wall01")
+# Broker logins; `credentials()` generates their passwords. RIG_DEVICE_IDS adds
+# real devices, separated by commas.
+BROKER_USERS = (
+    "homeassistant",
+    "tender01",
+    "tender02",
+    "wall01",
+    *filter(None, os.environ.get("RIG_DEVICE_IDS", "").split(",")),
+)
+# The address the broker listens on; set it to a LAN address to reach a device.
+MQTT_BIND = os.environ.get("RIG_MQTT_BIND", "127.0.0.1")
 BASE = f"http://127.0.0.1:{HA_PORT}"
 CLIENT = f"{BASE}/"
 HA_IMAGE = "ghcr.io/home-assistant/home-assistant:stable"
@@ -165,7 +174,7 @@ def up(language: str) -> None:
         "--network",
         NET,
         "-p",
-        f"127.0.0.1:{MQTT_PORT}:1883",
+        f"{MQTT_BIND}:{MQTT_PORT}:1883",
         "--security-opt",
         "label=disable",
         "-v",
