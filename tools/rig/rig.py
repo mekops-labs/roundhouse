@@ -6,6 +6,7 @@ repository. Nothing here is used by the tests or shipped to users.
     rig.py up         start Mosquitto and Home Assistant, wait until it answers
     rig.py onboard    create the owner, the token, and the MQTT integration
     rig.py confirm    accept the discovered device
+    rig.py walk       walk the editor page in a browser and check each step
     rig.py seed       set demo states and fill the views of a device
     rig.py shot       screenshot the Roundhouse panel
     rig.py logs       print the Home Assistant log, filtered to Roundhouse
@@ -482,15 +483,8 @@ def seed(device_id: str, profile_name: str, scenario: str) -> None:
     print("save:", reply.get("success"), result.get("ok"), result.get("errors", ""))  # type: ignore[union-attr]
 
 
-def screenshot(
-    out: Path,
-    wait: int = 7000,
-    poke: str = "",
-    after: int = 500,
-    device: str = "",
-    edit: bool = False,
-) -> None:
-    """Run tools/rig/shot.py in Playwright's container (the host lacks browser libraries)."""
+def write_browser_tokens() -> None:
+    """Write the login a browser in the Playwright container starts with."""
     saved = tokens()
     stored = {
         "access_token": access(),
@@ -502,6 +496,80 @@ def screenshot(
         "refresh_token": saved["refresh_token"],
     }
     (RIG / "browser-tokens.json").write_text(json.dumps(stored))
+
+
+def walk(device_id: str, profile_name: str) -> int:
+    """Walk the editor page in a browser; return the exit code of the walk."""
+    token = access()
+    http(
+        "POST",
+        "/api/states/climate.heatpump",
+        {
+            "state": "heat",
+            "attributes": {
+                "friendly_name": "Heat pump",
+                "hvac_modes": ["heat", "cool", "off"],
+                "preset_modes": ["eco", "comfort", "away"],
+                "preset_mode": "eco",
+                "hvac_action": "heating",
+                "current_temperature": 21.5,
+                "temperature": 22,
+                "min_temp": 7,
+                "max_temp": 30,
+            },
+        },
+        token,
+    )
+    profile = profile_of(profile_name)
+    base = [
+        "light.ceiling",
+        "light.desk",
+        "switch.pump",
+        "lock.door",
+        "cover.gate",
+        "sensor.outdoor",
+        "binary_sensor.motion",
+        "scene.evening",
+        "light.extra2",
+    ]
+    reply = save_views(device_id, build_views(profile, [("home", base)]))
+    if not reply.get("success") or not reply.get("result", {}).get("ok"):  # type: ignore[union-attr]
+        print("could not set the starting views:", reply)
+        return 2
+    write_browser_tokens()
+    version = PLAYWRIGHT
+    result = podman(
+        "run",
+        "--rm",
+        "--network",
+        "host",
+        "--security-opt",
+        "label=disable",
+        "-v",
+        f"{RIG}:/rig",
+        "-v",
+        f"{REPO}/tools/rig:/tools:ro",
+        f"mcr.microsoft.com/playwright/python:v{version}-noble",
+        "bash",
+        "-c",
+        f"pip install -q --break-system-packages playwright=={version} 2>&1 | tail -1;"
+        f" python3 /tools/walk.py --base {BASE} --out /rig",
+        check=False,
+    )
+    print(result.stdout, result.stderr[-1500:] if result.returncode else "")
+    return result.returncode
+
+
+def screenshot(
+    out: Path,
+    wait: int = 7000,
+    poke: str = "",
+    after: int = 500,
+    device: str = "",
+    edit: bool = False,
+) -> None:
+    """Run tools/rig/shot.py in Playwright's container (the host lacks browser libraries)."""
+    write_browser_tokens()
     version = PLAYWRIGHT
     result = podman(
         "run",
@@ -575,6 +643,9 @@ def main() -> None:
     sh.add_argument("--after", type=int, default=500)
     sub.add_parser("logs")
     sub.add_parser("confirm")
+    w = sub.add_parser("walk")
+    w.add_argument("--device", default="tender01")
+    w.add_argument("--profile", choices=("tender", "wall-panel"), default="tender")
     args = parser.parse_args()
     if args.cmd == "up":
         up(args.language)
@@ -594,6 +665,8 @@ def main() -> None:
         )
     elif args.cmd == "confirm":
         confirm()
+    elif args.cmd == "walk":
+        sys.exit(walk(args.device, args.profile))
     else:
         logs()
 
