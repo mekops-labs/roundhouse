@@ -134,3 +134,159 @@ test("a state frame keeps the device picker", async () => {
   assert.equal(el.shadowRoot.children[1], header);
   assert.equal(header.children[1], picker);
 });
+
+// --- editing ------------------------------------------------------------------
+
+const tender = vector("tender");
+const rules = { domains: ["light", "climate"], controls: {} };
+const home = { path: "home", title: "Home", layout: 0, tiles: [{ entity_id: "light.a" }], overflow: null };
+const saved = (revision = 3, views = [home]) => ({
+  type: "snapshot",
+  device_id: "a",
+  profile: tender,
+  rules,
+  revision,
+  snapshot: null,
+  views,
+  states: {},
+  icons: {},
+});
+
+function storage() {
+  const items = new Map();
+  globalThis.sessionStorage = {
+    getItem: (k) => items.get(k) ?? null,
+    setItem: (k, v) => items.set(k, v),
+    removeItem: (k) => items.delete(k),
+  };
+  return items;
+}
+
+// A panel showing device "a" with a saved snapshot, and the calls it makes.
+async function editor(results = {}, items = storage(), revision = 3) {
+  const calls = [];
+  const conn = connection();
+  const el = new Panel();
+  el._connected = true;
+  el.hass = {
+    states: {},
+    connection: conn,
+    callWS: async (msg) => {
+      calls.push(msg);
+      if (msg.type === "roundhouse/devices") return [{ device_id: "a", title: "Tender" }];
+      return results[msg.type] ?? {};
+    },
+  };
+  await tick();
+  conn.subs[0].resolve();
+  await tick();
+  conn.subs[0].callback(saved(revision));
+  return { el, calls, conn, items };
+}
+
+test("Done saves the draft with the revision it started from", async () => {
+  const { el, calls } = await editor({ "roundhouse/editor/save": { ok: true, revision: 4 } });
+  el._edit();
+  el._changed(
+    (await import("../../custom_components/roundhouse/panel/draft.js")).setTitle(el._draft, "home", "Lounge"),
+  );
+  await el._done();
+  const save = calls.find((c) => c.type === "roundhouse/editor/save");
+  assert.equal(save.device_id, "a");
+  assert.equal(save.revision, 3);
+  assert.equal(save.views[0].title, "Lounge");
+  assert.equal(save.snapshot, null);
+  assert.equal(el._draft, null, "edit mode ends after a save");
+});
+
+test("Done with a broken draft shows the errors and saves nothing", async () => {
+  const { el, calls } = await editor();
+  el._edit();
+  const { setTitle } = await import("../../custom_components/roundhouse/panel/draft.js");
+  el._changed(setTitle(el._draft, "home", ""));
+  await el._done();
+  assert.equal(calls.some((c) => c.type === "roundhouse/editor/save"), false);
+  assert.ok(el._draft, "still editing");
+  assert.equal(el._banner.list.length, 1);
+  assert.match(el._banner.list[0], /title has 1 to 32/);
+});
+
+test("a conflict keeps the draft and offers to discard it", async () => {
+  const { el } = await editor({ "roundhouse/editor/save": { ok: false, error: "conflict", revision: 4 } });
+  el._edit();
+  await el._done();
+  assert.ok(el._draft);
+  assert.equal(el._banner.action[0], "Discard my edits");
+  el._banner.action[1]();
+  assert.equal(el._draft, null);
+});
+
+test("errors from the server are shown by their view and tile", async () => {
+  const errors = [{ view: 0, tile: 0, code: "unsupported_domain", message: "light.a cannot be shown on a device" }];
+  const { el } = await editor({ "roundhouse/editor/save": { ok: false, error: "invalid", errors } });
+  el._edit();
+  await el._done();
+  assert.deepEqual(el._errors, errors);
+  assert.match(el._banner.list[0], /View "Home", tile 1: light.a cannot be shown/);
+});
+
+test("views saved elsewhere while editing raise a banner, but not for our own save", async () => {
+  const { el, conn } = await editor();
+  el._edit();
+  conn.subs[0].callback(saved(4));
+  assert.match(el._banner.text, /saved from another page/);
+
+  const own = await editor();
+  own.el._edit();
+  own.el._saving = true;
+  own.conn.subs[0].callback(saved(4));
+  assert.equal(own.el._banner, null);
+});
+
+test("an unsaved draft survives leaving the page when the views did not change", async () => {
+  const { el, items } = await editor();
+  el._edit();
+  const { setTitle } = await import("../../custom_components/roundhouse/panel/draft.js");
+  el._changed(setTitle(el._draft, "home", "Lounge"));
+  el._connected = false;
+  el.disconnectedCallback();
+  assert.ok(items.get("roundhouse.draft.a"));
+
+  // Home Assistant builds a new element when the user comes back.
+  const back = await editor({}, items);
+  assert.equal(back.el._draft.views[0].title, "Lounge");
+  assert.match(back.el._banner.text, /restored/);
+  assert.equal(items.has("roundhouse.draft.a"), false, "kept once, then taken");
+});
+
+test("a kept draft is dropped when the views changed meanwhile", async () => {
+  const { el, items } = await editor();
+  el._edit();
+  const { setTitle } = await import("../../custom_components/roundhouse/panel/draft.js");
+  el._changed(setTitle(el._draft, "home", "Lounge"));
+  el._connected = false;
+  el.disconnectedCallback();
+
+  const back = await editor({}, items, 9); // the views were saved elsewhere in between
+  assert.equal(back.el._draft, null);
+  assert.equal(items.has("roundhouse.draft.a"), false);
+});
+
+test("a draft that was never changed is not kept", async () => {
+  const { el, items } = await editor();
+  el._edit();
+  el._connected = false;
+  el.disconnectedCallback();
+  assert.equal(items.has("roundhouse.draft.a"), false);
+});
+
+test("the header shows the version, linked only for a release", async () => {
+  const { el } = await editor();
+  el.panel = { config: { version: "0.2.0" } };
+  const link = el._headerEl.children.find((c) => c.className === "version");
+  assert.equal(link.tagName, "a");
+  assert.match(link.href, /blob\/v0\.2\.0\/CHANGELOG\.md$/);
+  el.panel = { config: { version: "dev" } };
+  const plain = el._headerEl.children.find((c) => c.className === "version");
+  assert.equal(plain.tagName, "span");
+});
