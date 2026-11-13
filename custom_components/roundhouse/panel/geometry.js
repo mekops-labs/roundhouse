@@ -16,9 +16,15 @@ export function capacity(profile) {
   return profile.layouts[densest(profile)].slots.length;
 }
 
-// The layout a view is drawn in: its own, or the densest when it overflows.
+// The layout a view is drawn in: its own, or the densest when it has none.
 export function layoutIndex(profile, view) {
-  return view.layout ?? densest(profile);
+  const index = view.layout;
+  return Number.isInteger(index) && index >= 0 && index < profile.layouts.length ? index : densest(profile);
+}
+
+// How many tiles the view's layout holds.
+export function slotCount(profile, view) {
+  return profile.layouts[layoutIndex(profile, view)].slots.length;
 }
 
 function toRect([x, y, w, h]) {
@@ -50,8 +56,20 @@ export function tileRect(profile, index, i) {
   };
 }
 
+// How many tiles the layout cannot hold; only a changed profile causes it.
 export function overflowCount(profile, view) {
-  return Math.max(0, view.tiles.length - capacity(profile));
+  return Math.max(0, view.tiles.length - slotCount(profile, view));
+}
+
+// The rectangles of the view's slots, in device pixels.
+export function slotRects(profile, view) {
+  const index = layoutIndex(profile, view);
+  return profile.layouts[index].slots.map(toRect);
+}
+
+// The slot under a point in device pixels, or -1.
+export function slotAt(profile, view, x, y) {
+  return slotRects(profile, view).findIndex((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
 }
 
 // The height of the drawing: the screen, plus the overflow strip when needed.
@@ -59,7 +77,7 @@ export function frameHeight(profile, view) {
   const extra = overflowCount(profile, view);
   if (extra === 0) return profile.display.height;
   const index = layoutIndex(profile, view);
-  const last = tileRect(profile, index, capacity(profile) + extra - 1);
+  const last = tileRect(profile, index, slotCount(profile, view) + extra - 1);
   return last.y + last.h + OVERFLOW_MARGIN / 2;
 }
 

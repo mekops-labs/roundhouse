@@ -20,6 +20,15 @@ export function reduce(model, message) {
   return model;
 }
 
+// Add rendered states and icons, such as those of a tile not saved yet.
+export function mergeRender(model, render) {
+  return {
+    snapshot: model.snapshot,
+    states: { ...model.states, ...render.states },
+    icons: { ...model.icons, ...render.icons },
+  };
+}
+
 export function tileState(model, entityId) {
   return model.states[entityId] ?? null;
 }

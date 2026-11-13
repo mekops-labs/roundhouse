@@ -15,7 +15,7 @@ function mask(size) {
 function model(profile, view, states) {
   const views = [view];
   const icons = Object.fromEntries(Object.values(states).map((s) => [s.icon, mask(profile.icon_px)]));
-  return reduce(emptyModel(), { type: "snapshot", profile, views, dashboard: "config", states, icons });
+  return reduce(emptyModel(), { type: "snapshot", profile, views, states, icons });
 }
 
 function tileFor(i, name = `Tile ${i}`) {
@@ -94,17 +94,45 @@ test("an exactly full view has no overflow marks", () => {
   assert.ok(!texts(calls).some((t) => t.includes(" / ") || t.startsWith("Does not fit")));
 });
 
-test("tabs appear when the dashboard has several views", () => {
+test("tabs appear when the device has several views", () => {
   const a = { path: "a", title: "Alpha", layout: 0, tiles: [] };
   const b = { path: "b", title: "Beta", layout: 0, tiles: [] };
+  const tabs = [
+    { id: "a", title: "Alpha" },
+    { id: "b", title: "Beta" },
+  ];
   const { ctx, calls } = recorder();
-  const m = reduce(emptyModel(), { type: "snapshot", profile: tender, views: [a, b], dashboard: "config", states: {}, icons: {} });
-  drawView(ctx, tender, m, b, { drawIcon() {} });
+  drawView(ctx, tender, emptyModel(), b, { drawIcon() {}, tabs });
   const labels = texts(calls);
   assert.ok(labels.includes("Alpha") && labels.includes("Beta"));
   const one = recorder();
-  drawView(one.ctx, tender, reduce(emptyModel(), { type: "snapshot", profile: tender, views: [a], dashboard: "config", states: {}, icons: {} }), a, { drawIcon() {} });
+  drawView(one.ctx, tender, emptyModel(), a, { drawIcon() {}, tabs: tabs.slice(0, 1) });
   assert.equal(texts(one.calls).filter((t) => t === "Alpha").length, 1, "no tab strip for one view");
+});
+
+test("the active tab is the one of the drawn view", () => {
+  const view = { key: "b", title: "Beta", layout: 0, tiles: [] };
+  const tabs = [
+    { id: "a", title: "Alpha" },
+    { id: "b", title: "Beta" },
+  ];
+  const { ctx, calls } = recorder();
+  drawView(ctx, tender, emptyModel(), view, { drawIcon() {}, tabs });
+  const fills = calls.filter((c) => c.name === "fillRect" && c.args[1] === 880);
+  assert.equal(fills[0].style.fillStyle, "#fff"); // Alpha, inactive
+  assert.equal(fills[1].style.fillStyle, "#000"); // Beta, active
+});
+
+test("a tile draws its label, or its name, or its entity", () => {
+  const model = emptyModel();
+  const one = (tile) => {
+    const { ctx, calls } = recorder();
+    drawView(ctx, tender, model, { title: "H", layout: 0, tiles: [tile] }, { drawIcon() {} });
+    return texts(calls);
+  };
+  assert.ok(one({ entity_id: "light.a", label: "Lamp", name: "Name" }).includes("Lamp"));
+  assert.ok(one({ entity_id: "light.a", name: "Name" }).includes("Name"));
+  assert.ok(one({ entity_id: "light.a" }).includes("light.a"));
 });
 
 test("a tile without a state yet shows an ellipsis and no icon", () => {

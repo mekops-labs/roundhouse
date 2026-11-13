@@ -1,6 +1,6 @@
 // Draw a view the way the device will: chrome, layout, tiles, and the overflow.
 
-import { capacity, frameHeight, layoutIndex, overflowTop, tileRect } from "./geometry.js";
+import { frameHeight, layoutIndex, overflowTop, slotCount, tileRect } from "./geometry.js";
 import { decodeMask, tint } from "./mask.js";
 
 const RED = "#d32f2f";
@@ -60,7 +60,8 @@ function drawHatched(ctx, rect, label) {
   ctx.fillText(label, rect.x + rect.w / 2, rect.y + rect.h / 2);
 }
 
-function drawTile(ctx, profile, model, tile, rect, deps) {
+// Draw one tile card in `rect`, as the device does. `tile.label` is its name.
+export function drawTile(ctx, profile, model, tile, rect, deps) {
   const state = model.states[tile.entity_id] ?? null;
   const colors = tileColors(profile, state);
   ctx.fillStyle = colors.bg;
@@ -81,7 +82,7 @@ function drawTile(ctx, profile, model, tile, rect, deps) {
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.font = `bold ${nameSize}px sans-serif`;
-  ctx.fillText(fitText(ctx, tile.name, textWidth), rect.x + rect.w / 2, rect.y + rect.h * 0.12 + size + nameSize + 8);
+  ctx.fillText(fitText(ctx, tile.label ?? tile.name ?? tile.entity_id, textWidth), rect.x + rect.w / 2, rect.y + rect.h * 0.12 + size + nameSize + 8);
   ctx.font = `${Math.round(nameSize * 0.9)}px sans-serif`;
   ctx.fillText(
     fitText(ctx, state ? state.text : "…", textWidth),
@@ -90,8 +91,8 @@ function drawTile(ctx, profile, model, tile, rect, deps) {
   );
 }
 
-function drawChrome(ctx, profile, snapshot, current) {
-  const { header, tabs } = profile.chrome;
+function drawChrome(ctx, profile, tabs, current) {
+  const { header } = profile.chrome;
   const gray = profile.display.format === "gray4";
   ctx.fillStyle = gray ? "#fff" : "#1f2328";
   ctx.fillRect(header[0], header[1], header[2], header[3]);
@@ -104,35 +105,35 @@ function drawChrome(ctx, profile, snapshot, current) {
   ctx.textBaseline = "middle";
   ctx.fillText(current.title, header[0] + 16, header[1] + header[3] / 2);
 
-  const views = snapshot.views;
-  if (views.length < 2) return;
-  const width = tabs[2] / views.length;
-  views.forEach((view, i) => {
-    const active = view.path === current.path;
-    const x = tabs[0] + i * width;
+  if (tabs.length < 2) return;
+  const strip = profile.chrome.tabs;
+  const width = strip[2] / tabs.length;
+  tabs.forEach((tab, i) => {
+    const active = tab.id === (current.key ?? current.path);
+    const x = strip[0] + i * width;
     ctx.fillStyle = active ? (gray ? "#000" : "#2f343a") : "#fff";
-    ctx.fillRect(x, tabs[1], width, tabs[3]);
+    ctx.fillRect(x, strip[1], width, strip[3]);
     ctx.strokeStyle = "#000";
-    ctx.strokeRect(x, tabs[1], width, tabs[3]);
+    ctx.strokeRect(x, strip[1], width, strip[3]);
     ctx.fillStyle = active ? "#fff" : "#000";
-    ctx.font = `${Math.round(tabs[3] * 0.32)}px sans-serif`;
+    ctx.font = `${Math.round(strip[3] * 0.32)}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(fitText(ctx, view.title, width - 12), x + width / 2, tabs[1] + tabs[3] / 2);
+    ctx.fillText(fitText(ctx, tab.title, width - 12), x + width / 2, strip[1] + strip[3] / 2);
   });
 }
 
 // Draw one view at the device's own resolution. `deps.drawIcon(ctx, rgba,
-// size, x, y)` puts a tinted mask on the canvas. Return the drawing's height.
+// size, x, y)` puts a tinted mask on the canvas, and `deps.tabs` lists the
+// views of the device as `{id, title}`. Return the drawing's height.
 export function drawView(ctx, profile, model, view, deps) {
-  const snapshot = model.snapshot;
   const height = frameHeight(profile, view);
   const width = profile.display.width;
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, width, height);
-  drawChrome(ctx, profile, snapshot, view);
+  drawChrome(ctx, profile, deps.tabs ?? [], view);
 
   const index = layoutIndex(profile, view);
-  const cap = capacity(profile);
+  const cap = slotCount(profile, view);
   view.tiles.forEach((tile, i) => {
     const rect = tileRect(profile, index, i);
     if (i >= cap) drawHatched(ctx, rect, `${i + 1} / ${cap}`);

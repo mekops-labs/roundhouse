@@ -7,6 +7,9 @@ import {
   frameHeight,
   layoutIndex,
   overflowCount,
+  slotAt,
+  slotCount,
+  slotRects,
   tileRect,
 } from "../../custom_components/roundhouse/panel/geometry.js";
 import { vector } from "./helpers.mjs";
@@ -72,4 +75,26 @@ test("the scale only shrinks", () => {
   assert.equal(fitScale(540, 1000), 1);
   assert.equal(fitScale(540, 270), 0.5);
   assert.equal(fitScale(540, 0), 1);
+});
+
+test("a bad layout index falls back to the densest layout", () => {
+  for (const layout of [undefined, null, -1, 2, 1.5, "1"]) {
+    assert.equal(layoutIndex(tender, view(1, layout)), 1, String(layout));
+  }
+});
+
+test("the slots of a view are those of its own layout", () => {
+  assert.equal(slotCount(tender, view(1, 0)), 8);
+  assert.equal(slotCount(tender, view(1, 1)), 15);
+  assert.equal(slotCount(tender, view(1, 9)), 15);
+  assert.equal(slotRects(tender, view(1, 0)).length, 8);
+  assert.equal(overflowCount(tender, view(9, 0)), 1); // 8 slots in the small layout
+});
+
+test("a point finds the slot under it", () => {
+  const v = view(3, 0);
+  assert.equal(slotAt(tender, v, 20, 100), 0);
+  assert.equal(slotAt(tender, v, 280, 100), 1);
+  assert.equal(slotAt(tender, v, 0, 0), -1); // the header
+  assert.equal(slotAt(tender, v, 270, 100), -1); // the gap between slots
 });
