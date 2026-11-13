@@ -5,8 +5,8 @@ repository. Nothing here is used by the tests or shipped to users.
 
     rig.py up         start Mosquitto and Home Assistant, wait until it answers
     rig.py onboard    create the owner, the token, and the MQTT integration
-    rig.py confirm    accept the discovered device and create its dashboard
-    rig.py seed       set demo states and fill the dashboard of a device
+    rig.py confirm    accept the discovered device
+    rig.py seed       set demo states and fill the views of a device
     rig.py shot       screenshot the Roundhouse panel
     rig.py logs       print the Home Assistant log, filtered to Roundhouse
     rig.py down       remove both containers (the state stays)
@@ -353,7 +353,60 @@ async def ws_call(messages: list[dict[str, object]]) -> list[dict[str, object]]:
     return results
 
 
-def seed(slug: str, scenario: str) -> None:
+def _densest(profile: dict[str, object]) -> int:
+    return max(len(x["slots"]) for x in profile["layouts"])  # type: ignore[attr-defined,index]
+
+
+def profile_of(name: str) -> dict[str, object]:
+    """Return the announce payload of a profile vector: `tender` or `wall-panel`."""
+    path = REPO / f"contract/vectors/v1.0/announce/{name}.json"
+    return json.loads(path.read_text())["payload"]  # type: ignore[no-any-return]
+
+
+def build_views(
+    profile: dict[str, object], spec: list[tuple[str, list[str]]]
+) -> list[dict[str, object]]:
+    """Return views for `(path, entities)` pairs, each in the first layout that fits."""
+    slots = [len(x["slots"]) for x in profile["layouts"]]  # type: ignore[attr-defined,index]
+    views = []
+    for path, entities in spec:
+        fitting = [i for i, n in enumerate(slots) if n >= len(entities)]
+        layout = fitting[0] if fitting else slots.index(max(slots))
+        tiles = [{"entity_id": e} for e in entities]
+        views.append(
+            {"path": path, "title": path.title(), "layout": layout, "tiles": tiles}
+        )
+    return views
+
+
+def save_views(
+    device_id: str, views: list[dict[str, object]], snapshot: str | None = None
+) -> dict[str, object]:
+    """Save a device's views through the editor command; retry once on a stale revision."""
+    revision = 1
+    reply: dict[str, object] = {}
+    for _ in range(3):
+        reply = asyncio.run(
+            ws_call(
+                [
+                    {
+                        "type": "roundhouse/editor/save",
+                        "device_id": device_id,
+                        "revision": revision,
+                        "views": views,
+                        "snapshot": snapshot,
+                    }
+                ]
+            )
+        )[0]
+        result = reply.get("result")
+        if not isinstance(result, dict) or result.get("error") != "conflict":
+            return reply
+        revision = int(result["revision"])
+    return reply
+
+
+def seed(device_id: str, profile_name: str, scenario: str) -> None:
     token = access()
     states = {
         "light.ceiling": (
@@ -414,39 +467,15 @@ def seed(slug: str, scenario: str) -> None:
         "scene.evening",
     ]
     extras = [f"light.extra{i}" for i in range(1, 12)]
-    views = {
-        "fit": [
-            {
-                "path": "home",
-                "title": "Home",
-                "cards": [{"type": "tile", "entity": e} for e in base],
-            }
-        ],
-        "overflow": [
-            {
-                "path": "home",
-                "title": "Home",
-                "cards": [{"type": "tile", "entity": e} for e in base[:5]],
-            },
-            {
-                "path": "all",
-                "title": "Everything",
-                "cards": [{"type": "tile", "entity": e} for e in base + extras],
-            },
-        ],
+    profile = profile_of(profile_name)
+    spec = {
+        "fit": [("home", base)],
+        # The densest layout filled to the last slot, beside a small view.
+        "full": [("home", base[:5]), ("all", (base + extras)[: _densest(profile)])],
     }[scenario]
-    result = asyncio.run(
-        ws_call(
-            [
-                {
-                    "type": "lovelace/config/save",
-                    "url_path": slug,
-                    "config": {"views": views},
-                }
-            ]
-        )
-    )
-    print("save:", result[0].get("success"), result[0].get("error", ""))
+    reply = save_views(device_id, build_views(profile, spec))
+    result = reply.get("result", {})
+    print("save:", reply.get("success"), result.get("ok"), result.get("errors", ""))  # type: ignore[union-attr]
 
 
 def screenshot(
@@ -489,8 +518,8 @@ def screenshot(
     print(result.stdout, result.stderr[-1500:] if result.returncode else "")
 
 
-def confirm(slug: str, device_id: str | None = None) -> None:
-    """Confirm every pending Roundhouse discovery with this dashboard slug."""
+def confirm(device_id: str | None = None) -> None:
+    """Confirm every pending Roundhouse discovery."""
     token = access()
     flows = asyncio.run(ws_call([{"type": "config_entries/flow/progress"}]))[0][
         "result"
@@ -503,15 +532,10 @@ def confirm(slug: str, device_id: str | None = None) -> None:
             reply = http(
                 "POST",
                 f"/api/config/config_entries/flow/{flow['flow_id']}",
-                {"slug": slug},
+                {},
                 token,
             )
-            print(
-                flow["context"]["unique_id"],
-                "->",
-                reply.get("type"),
-                reply.get("data", {}).get("slug"),
-            )  # type: ignore[union-attr]
+            print(flow["context"]["unique_id"], "->", reply.get("type"))  # type: ignore[union-attr]
 
 
 def logs() -> None:
@@ -530,16 +554,16 @@ def main() -> None:
     sub.add_parser("down")
     sub.add_parser("onboard")
     s = sub.add_parser("seed")
-    s.add_argument("--slug", default="tender-panel")
-    s.add_argument("--scenario", choices=("fit", "overflow"), default="fit")
+    s.add_argument("--device", default="tender01")
+    s.add_argument("--profile", choices=("tender", "wall-panel"), default="tender")
+    s.add_argument("--scenario", choices=("fit", "full"), default="fit")
     sh = sub.add_parser("shot")
     sh.add_argument("--out", default=str(RIG / "panel.png"))
     sh.add_argument("--poke", default="")
     sh.add_argument("--device", default="")
     sh.add_argument("--after", type=int, default=500)
     sub.add_parser("logs")
-    c = sub.add_parser("confirm")
-    c.add_argument("--slug", default="tender-panel")
+    sub.add_parser("confirm")
     args = parser.parse_args()
     if args.cmd == "up":
         up(args.language)
@@ -548,11 +572,11 @@ def main() -> None:
     elif args.cmd == "onboard":
         onboard()
     elif args.cmd == "seed":
-        seed(args.slug, args.scenario)
+        seed(args.device, args.profile, args.scenario)
     elif args.cmd == "shot":
         screenshot(Path(args.out), poke=args.poke, after=args.after, device=args.device)
     elif args.cmd == "confirm":
-        confirm(args.slug)
+        confirm()
     else:
         logs()
 

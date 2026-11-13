@@ -89,18 +89,16 @@ class Ha:
 
         return asyncio.run(rig.ws_call(messages))  # type: ignore[arg-type,return-value]
 
-    def save_dashboard(self, slug: str, views: list[dict[str, Any]]) -> None:
-        """Save a dashboard's config."""
-        result = self.ws(
-            [
-                {
-                    "type": "lovelace/config/save",
-                    "url_path": slug,
-                    "config": {"views": views},
-                }
-            ]
-        )
-        assert result[0].get("success"), result
+    def save_views(
+        self,
+        device_id: str,
+        profile: dict[str, Any],
+        paths: list[tuple[str, list[str]]],
+    ) -> dict[str, Any]:
+        """Save a device's views through the editor command; return its result."""
+        reply = rig.save_views(device_id, rig.build_views(profile, paths))
+        assert reply.get("success"), reply
+        return reply["result"]  # type: ignore[no-any-return]
 
     def wait_ready(self, timeout: float = 240) -> float:
         """Wait until Home Assistant reports it is running; return the time it took."""
@@ -286,33 +284,23 @@ class ImageServer:
 def setup(devices: list[tuple[str, str, str]]) -> tuple[Ha, list[Double]]:
     """Start the instance, onboard it, and bring the doubles online and set up.
 
-    `devices` is (device_id, profile name, dashboard slug).
+    `devices` is (device_id, profile name).
     """
     rig.up("en")
     rig.onboard()
     ha = Ha()
-    doubles = [Double(device_id, profile) for device_id, profile, _slug in devices]
+    doubles = [Double(device_id, profile) for device_id, profile in devices]
     for double in doubles:
         double.start()
     time.sleep(4)
-    for device_id, _profile, slug in devices:
-        rig.confirm(slug, device_id)
+    for device_id, _profile in devices:
+        rig.confirm(device_id)
     time.sleep(3)
     started = now()
-    for _device_id, _profile, slug in devices:
-        ha.save_dashboard(
-            slug,
-            [
-                {
-                    "path": "home",
-                    "title": "Home",
-                    "cards": [{"type": "tile", "entity": e} for e in POOL[:5]],
-                }
-            ],
-        )
-    for (
-        double
-    ) in doubles:  # the first digest waits 2 s; start only once everything is out
+    for double in doubles:
+        result = ha.save_views(double.device_id, double.profile, [("home", POOL[:5])])
+        assert result["ok"], result
+    for double in doubles:  # start only once everything is out
         for suffix in ["views"] + [f"state/{e}" for e in POOL[:5]]:
             if double.wait(suffix, lambda b: True, started, 30) is None:
                 raise TimeoutError(f"{double.device_id}: no {suffix} after setup")

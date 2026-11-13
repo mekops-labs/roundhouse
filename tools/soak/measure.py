@@ -65,21 +65,12 @@ def measure(ha: Ha, doubles: list[harness.Double], quick: bool) -> dict[str, Any
             out["command_to_result"].append(took)
         time.sleep(0.05)
 
-    # Dashboard save to view definition on the device, with the 2 s wait.
-    slug = DEVICES[0][2]
+    # Done in the editor to the view definition on the device.
+    device_id = DEVICES[0][0]
     for i in range(n_save):
         chosen = [POOL[(i + j) % len(POOL)] for j in range(3 + i % 5)]
         started = now()
-        ha.save_dashboard(
-            slug,
-            [
-                {
-                    "path": "home",
-                    "title": "Home",
-                    "cards": [{"type": "tile", "entity": e} for e in chosen],
-                }
-            ],
-        )
+        ha.save_views(device_id, tender.profile, [("home", chosen)])
         got = tender.wait(
             "views",
             lambda b, c=chosen: (
@@ -147,9 +138,9 @@ def table(result: dict[str, Any]) -> str:
     rows = [
         ("Entity state change to `state/…` publish", "state_to_publish", "≤ 200 ms"),
         (
-            "Dashboard save to `views` publish (with the 2 s wait)",
+            "Done in the editor to `views` publish",
             "save_to_views",
-            "≤ 3 s",
+            "≤ 1 s",
         ),
         (
             "`cmd` to `result` (an instant service)",
@@ -220,7 +211,7 @@ two device doubles on the broker and the documented ACL applied.
 
 Each number is the time from the action to the message the device sees, as the
 double measures it on the same host. The state rows include the REST call that
-makes the change. The save row includes the 2 s wait of the digest. The snapshot
+makes the change. The snapshot
 comes from an image URL on the same host; a camera adds the time the camera
 needs to produce an image.
 

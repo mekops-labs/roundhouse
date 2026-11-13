@@ -20,7 +20,7 @@ COUNT = """() => {
   if (!panel) return {panel: false};
   const root = panel.shadowRoot;
   return {panel: true, canvases: root.querySelectorAll('canvas').length,
-          sections: [...root.querySelectorAll('section')].map(s => s.innerText.replace(/\\n/g, ' | ').slice(0, 120)),
+          sections: [...root.querySelectorAll('.tab, .meta')].map(s => s.innerText.replace(/\\n/g, ' | ').slice(0, 120)),
           text: root.textContent.slice(0, 160)};
 }"""
 
@@ -73,12 +73,10 @@ async def main() -> None:
         if args.poke:
             started = await page.evaluate("() => performance.now()")
             for item in json.loads(args.poke):
-                if (
-                    "save" in item
-                ):  # a dashboard save through the frontend's own connection
+                if "save" in item:  # a views save through the frontend's own connection
                     await page.evaluate(
                         "async (save) => { await document.querySelector('home-assistant').hass.callWS("
-                        "{type: 'lovelace/config/save', url_path: save.url_path, config: save.config}); }",
+                        "{type: 'roundhouse/editor/save', ...save}); }",
                         item["save"],
                     )
                     continue

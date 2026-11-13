@@ -5,7 +5,7 @@
 
 Two device doubles (a Tender and a wall panel) stay on a broker that applies the
 documented ACL. The workload changes entities from Home Assistant and from the
-devices, edits the dashboards, raises alerts, and restarts Home Assistant and
+devices, edits the views, raises alerts, and restarts Home Assistant and
 the broker on a schedule. The run fails on any lost update, any unanswered
 command, any blocking-call warning, or any state that disagrees with Home
 Assistant at the end. The report goes to SOAK_DIR/report.json and report.md.
@@ -25,8 +25,8 @@ import harness
 from harness import LAMPS, LEVELS, POOL, Double, Ha, now, stats
 
 DEVICES = [
-    ("tender01", "tender", "tender-panel"),
-    ("wall01", "wall", "wallpanel-panel"),
+    ("tender01", "tender"),
+    ("wall01", "wall"),
 ]
 STATE_DEADLINE = 6.0
 COMMAND_DEADLINE = 15.0
@@ -63,8 +63,8 @@ class Soak:
             for k in (
                 "ha_changes",
                 "device_commands",
-                "dashboard_edits",
-                "overflow_edits",
+                "view_edits",
+                "refused_edits",
                 "alerts",
                 "acks",
                 "ha_restarts",
@@ -156,8 +156,8 @@ class Soak:
         if after == before:
             self.fail(f"toggle {entity} did not change the state ({before})")
 
-    def edit_dashboard(self, overflow: bool = False) -> None:
-        """Rewrite a dashboard; a view that fits must reach the device, one that does not must not."""
+    def edit_views(self, overflow: bool = False) -> None:
+        """Save new views; a save that fits must reach the device, one that does not must be refused."""
         double = self.random.choice(self.doubles)
         capacity = double.capacity
         size = (
@@ -168,30 +168,28 @@ class Soak:
         chosen = [self.random.choice(POOL) for _ in range(size)]
         if not overflow and chosen == self.tiles[double.device_id]:
             return
-        slug = next(s for d, _p, s in DEVICES if d == double.device_id)
         started = now()
-        self.ha.save_dashboard(
-            slug,
-            [
-                {
-                    "path": "home",
-                    "title": "Home",
-                    "cards": [{"type": "tile", "entity": e} for e in chosen],
-                }
-            ],
+        result = self.ha.save_views(
+            double.device_id, double.profile, [("home", chosen)]
         )
         if overflow:
-            self.counts["overflow_edits"] += 1
+            self.counts["refused_edits"] += 1
+            if result.get("ok"):
+                self.fail(f"{double.device_id}: a save of {size} tiles was accepted")
             time.sleep(4)
             latest = double.latest("views")
             ids = [t["entity_id"] for v in latest["views"] for t in v["tiles"]]
             if ids != self.tiles[double.device_id]:
                 self.fail(
-                    f"{double.device_id}: an overflowing view changed the device ({len(ids)} tiles)"
+                    f"{double.device_id}: a refused save changed the device ({len(ids)} tiles)"
                 )
-            self.held[double.device_id] = True
             return
-        self.counts["dashboard_edits"] += 1
+        if not result.get("ok"):
+            self.fail(
+                f"{double.device_id}: a save of {size} tiles was refused: {result}"
+            )
+            return
+        self.counts["view_edits"] += 1
         got = double.wait(
             "views",
             lambda b: (
@@ -207,7 +205,6 @@ class Soak:
             return
         self.latency["views"].append(got[0] - started)
         self.tiles[double.device_id] = chosen
-        self.held[double.device_id] = False
 
     def alert(self) -> None:
         """Raise an alert with a snapshot; the device sees it, acknowledges it, sees it read."""
@@ -428,11 +425,11 @@ class Soak:
                 step = self.random.random()
                 (self.ha_change if step < 0.55 else self.device_command)()
                 if now() >= next_edit:
-                    self.edit_dashboard()
+                    self.edit_views()
                     next_edit = now() + self.random.uniform(60, 180)
                 if now() >= next_overflow:
-                    self.edit_dashboard(overflow=True)
-                    self.edit_dashboard()  # and back to something that fits
+                    self.edit_views(overflow=True)
+                    self.edit_views()  # and back to something that fits
                     next_overflow = now() + self.random.uniform(300, 900)
                 if now() >= next_alert:
                     self.alert()
