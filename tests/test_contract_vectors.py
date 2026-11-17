@@ -13,6 +13,8 @@ from custom_components.roundhouse import codec
 
 CONTRACT = Path(__file__).parents[1] / "contract"
 VECTORS = CONTRACT / "vectors" / "v1.1"
+# Roundhouse speaks 1.1 and still serves a 1.0 device: both sets must pass.
+SETS = ("v1.0", "v1.1")
 SCHEMA = json.loads((CONTRACT / "schema.json").read_text())
 JSON_KINDS = (
     "announce",
@@ -29,11 +31,15 @@ JSON_KINDS = (
 SEMANTIC_ERRORS = {"major_mismatch"}
 
 
-def _load(kinds: tuple[str, ...]) -> list[tuple[str, dict[str, Any]]]:
+def _load(
+    kinds: tuple[str, ...], sets: tuple[str, ...] = SETS
+) -> list[tuple[str, dict[str, Any]]]:
     out = []
-    for kind in kinds:
-        for path in sorted((VECTORS / kind).glob("*.json")):
-            out.append((f"{kind}/{path.stem}", json.loads(path.read_text())))
+    for version in sets:
+        for kind in kinds:
+            for path in sorted((CONTRACT / "vectors" / version / kind).glob("*.json")):
+                name = f"{version}/{kind}/{path.stem}"
+                out.append((name, json.loads(path.read_text())))
     return out
 
 
@@ -70,7 +76,7 @@ def test_every_structured_topic_has_a_definition() -> None:
 
 def test_every_kind_has_valid_and_invalid_vectors() -> None:
     for kind in JSON_KINDS:
-        vecs = [v for _, v in _load((kind,))]
+        vecs = [v for _, v in _load((kind,), ("v1.1",))]
         assert any(v["valid"] for v in vecs), kind
         if kind != "availability":
             assert any(not v["valid"] for v in vecs), kind

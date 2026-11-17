@@ -32,7 +32,7 @@ def main() -> None:
     parser.add_argument("--password", default=os.environ.get("RIG_DEVICE_PASSWORD"))
     args = parser.parse_args()
     device_id = args.id or ("tender01" if args.profile == "tender" else "wall01")
-    path = REPO / f"contract/vectors/v1.0/announce/{PROFILES[args.profile]}.json"
+    path = REPO / f"contract/vectors/v1.1/announce/{PROFILES[args.profile]}.json"
     profile = json.loads(path.read_text())["payload"]
     log = (RIG / "double.log").open("a")
 

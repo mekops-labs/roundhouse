@@ -131,7 +131,7 @@ class Double:
         """Initialize the double for a profile name (`tender` or `wall`)."""
         self.device_id = device_id
         self.prefix = f"roundhouse/{device_id}"
-        path = REPO / f"contract/vectors/v1.0/announce/{PROFILES[profile]}.json"
+        path = REPO / f"contract/vectors/v1.1/announce/{PROFILES[profile]}.json"
         self.profile = json.loads(path.read_text())["payload"]
         self.capacity = len(self.profile["layouts"][-1]["slots"])
         self.cond = threading.Condition()

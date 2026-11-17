@@ -25,7 +25,7 @@ from custom_components.roundhouse.const import DOMAIN, STALE_SETTLE_SECONDS
 from custom_components.roundhouse.device import Device
 from custom_components.roundhouse.publisher import PayloadTooLargeError
 
-from .conftest import announce, make_entry, vector
+from .conftest import VECTORS, announce, make_entry, vector
 
 PREFIX = "roundhouse/tender01/"
 
@@ -48,6 +48,19 @@ async def _settle(hass: HomeAssistant) -> None:
         hass, dt_util.utcnow() + timedelta(seconds=STALE_SETTLE_SECONDS + 1)
     )
     await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def test_a_device_of_contract_1_0_is_served(
+    hass: HomeAssistant, mqtt_mock: Any
+) -> None:
+    path = VECTORS.parent / "v1.0" / "announce" / "tender.json"
+    old = json.loads(path.read_text())["payload"]
+    assert old["contract"] == "1.0"
+    device = await _setup(hass, make_entry(old))
+    assert device.error is None
+    assert device.views_payload is not None and device.views_payload["views"]
+    assert any(p[0] == PREFIX + "views" for p in published(mqtt_mock))
+    await _settle(hass)
 
 
 async def test_setup_publishes_meta_retained(

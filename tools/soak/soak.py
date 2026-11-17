@@ -54,6 +54,7 @@ class Soak:
                 "views",
                 "alert",
                 "ack",
+                "clear",
                 "ha_resync",
                 "broker_resync",
             )
@@ -67,6 +68,7 @@ class Soak:
                 "refused_edits",
                 "alerts",
                 "acks",
+                "clears",
                 "ha_restarts",
                 "broker_restarts",
                 "state_checks",
@@ -271,6 +273,23 @@ class Soak:
             )
         else:
             self.latency["ack"].append(read[0] - acked)
+        if self.counts["alerts"] % 2 == 0:
+            self.clear(double, alert_id)
+
+    def clear(self, double: Double, alert_id: str) -> None:
+        """The device clears all its alerts; the alert's topic is emptied."""
+        started = now()
+        result, _ = double.command({"clear_alerts": True})
+        gone = double.wait(
+            f"alert/{alert_id}", lambda b: b == b"", started, ALERT_DEADLINE
+        )
+        self.counts["clears"] += 1
+        if result != "ok" or gone is None:
+            self.fail(
+                f"{double.device_id}: clearing all alerts not confirmed ({result!r})"
+            )
+        else:
+            self.latency["clear"].append(gone[0] - started)
 
     # --- restarts ------------------------------------------------------------
 

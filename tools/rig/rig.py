@@ -373,7 +373,7 @@ def _densest(profile: dict[str, object]) -> int:
 
 def profile_of(name: str) -> dict[str, object]:
     """Return the announce payload of a profile vector: `tender` or `wall-panel`."""
-    path = REPO / f"contract/vectors/v1.0/announce/{name}.json"
+    path = REPO / f"contract/vectors/v1.1/announce/{name}.json"
     return json.loads(path.read_text())["payload"]  # type: ignore[no-any-return]
 
 

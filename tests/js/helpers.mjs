@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 const here = new URL(".", import.meta.url);
 
 export function vector(name) {
-  const path = new URL(`../../contract/vectors/v1.0/announce/${name}.json`, here);
+  const path = new URL(`../../contract/vectors/v1.1/announce/${name}.json`, here);
   return JSON.parse(readFileSync(path, "utf8")).payload;
 }
 
