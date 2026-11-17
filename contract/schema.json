@@ -204,7 +204,7 @@
     },
 
     "cmd": {
-      "anyOf": [
+      "oneOf": [
         {
           "type": "object",
           "required": ["req", "entity_id", "action"],

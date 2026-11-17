@@ -101,10 +101,11 @@ A key is absent when the entity has no such value.
 A command on `cmd` has a `req` (1 to 64 characters, unique per request) and
 one of four forms: an entity action (`entity_id`, `action`, optional `data`
 and `confirmed`), an alert action (`alert`, `action_id`, optional `confirmed`),
-an acknowledgment (`ack`), or, since 1.1, `clear_alerts: true`. A device sends
-`clear_alerts` only to a peer whose `meta` names 1.1 or later. Roundhouse answers each on `result` with the same
-`req`. A repeat of a `req` among the last 32 gets the stored result and no
-second action.
+an acknowledgment (`ack`), or, since 1.1, `clear_alerts: true`. A command has
+exactly one form; one with the fields of two is `invalid`. A device sends
+`clear_alerts` only to a peer whose `meta` names 1.1 or later. Roundhouse
+answers each command on `result` with the same `req`. A repeat of a `req` among
+the last 32 gets the stored result and no second action.
 
 Results: `ok`, `denied` (the entity is not on the device, the action does not
 exist for the domain, or no such alert), `invalid` (a value failed its check),
@@ -169,10 +170,10 @@ action (`confirm` true) needs `confirmed: true`, else the result is
 `alert/<id>/image` or `alert/<id>/thumb`, in the display format, within the
 announced `image_box` or `thumb_box` and the announced `max_payload`. Roundhouse
 publishes the bitmaps before the alert that names them, and publishes the alert
-again with the images if the snapshot arrives late. `clear_alerts` removes
-every alert of the device: Roundhouse clears their topics and answers `ok`.
-An unknown or expired alert
+again with the images if the snapshot arrives late. An unknown or expired alert
 gets the result `denied`, for an action and for an acknowledgment alike.
+`clear_alerts` removes every alert of the device: Roundhouse acknowledges each
+unread one, clears their topics, and answers `ok`.
 
 ## Control types
 

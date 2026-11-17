@@ -358,6 +358,9 @@ def _cmd(doc: Any) -> dict[str, Any]:
     if len(rid) > 64:
         raise _fail("req", "longer than 64 characters")
     confirmed = _bool(o.get("confirmed", False), "confirmed")
+    forms = [k for k in ("entity_id", "alert", "ack", "clear_alerts") if k in o]
+    if len(forms) > 1:
+        raise _fail("cmd", f"more than one form: {', '.join(forms)}")
     if "entity_id" in o:
         data = o.get("data")
         return {

@@ -10,7 +10,12 @@ A minor version adds only:
 - optional fields to an existing object;
 - new topics;
 - new values in an open set (see `ENCODINGS.md`);
-- new control types and new pixel formats.
+- new control types and new pixel formats;
+- new forms of `cmd`.
+
+A peer of an older minor version answers a new `cmd` form `invalid`, so a
+device sends one only when the `meta` it holds names that minor version or a
+later one. Contract 1.1 added `clear_alerts` this way.
 
 A minor version never removes, renames, or retypes a field. It never makes an
 optional field required, never changes a meaning, and never changes a binary

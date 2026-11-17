@@ -1,0 +1,11 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r9",
+    "ack": "a1b2c3",
+    "clear_alerts": true
+  },
+  "valid": false,
+  "error": "invalid"
+}
