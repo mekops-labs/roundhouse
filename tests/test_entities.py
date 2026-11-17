@@ -71,7 +71,7 @@ async def test_a_battery_device_gets_every_entity(
     assert state(hass, "sensor", "battery").attributes["device_class"] == "battery"
     assert state(hass, "binary_sensor", "charging").state == "off"
     assert state(hass, "sensor", "power_mode").state == "sleep"
-    assert state(hass, "sensor", "contract_version").state == "1.0"
+    assert state(hass, "sensor", "contract_version").state == "1.1"
     assert state(hass, "sensor", "unread_alerts").state == "0"
     assert entity_id(hass, "notify", "notify") is not None
     assert entity_id(hass, "device_tracker", "presence") is not None

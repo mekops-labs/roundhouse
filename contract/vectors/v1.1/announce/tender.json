@@ -2,7 +2,7 @@
   "kind": "announce",
   "topic": "roundhouse/tender01/announce",
   "payload": {
-    "contract": "1.0",
+    "contract": "1.1",
     "model": "tender",
     "fw": "0.4.0",
     "wapp": "0.2.0",
@@ -194,7 +194,7 @@
   },
   "valid": true,
   "decoded": {
-    "contract": "1.0",
+    "contract": "1.1",
     "model": "tender",
     "fw": "0.4.0",
     "wapp": "0.2.0",
