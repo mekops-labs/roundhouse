@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-17)
 
 ### Added
 
@@ -8,6 +8,10 @@
   can draw. WebSocket command `roundhouse/editor/icons` lists them.
 - Contract 1.1: a device can clear all its alerts with `clear_alerts`. Unread
   alerts are acknowledged first. `meta` names 1.1.
+
+### Changed
+
+- A command that carries the fields of two forms is answered `invalid`.
 
 ## 0.2.0 (2026-11-14)
 
