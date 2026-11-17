@@ -406,6 +406,31 @@ async def test_clearing_from_the_device_removes_every_alert(
     assert await cmd(hass, mqtt_mock, {"req": "c2", "clear_alerts": True}) == "ok"
 
 
+async def test_a_clear_that_fails_midway_keeps_the_rest_stored(
+    hass: HomeAssistant, mqtt_mock: Any, device: Any, monkeypatch: Any
+) -> None:
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_ALERT_ACKNOWLEDGED, events.append)
+    ids = [next(iter((await send(hass, tag=f"t{i}")).values())) for i in range(3)]
+    real = device.alerts._clear
+    calls: list[str] = []
+
+    async def clear(alert: dict[str, Any]) -> None:
+        calls.append(alert["id"])
+        if len(calls) == 2:
+            raise OSError("disk full")
+        await real(alert)
+
+    monkeypatch.setattr(device.alerts, "_clear", clear)
+    assert await cmd(hass, mqtt_mock, {"req": "x1", "clear_alerts": True}) != "ok"
+    first = calls[0]
+    assert device.alerts.get(first) is None
+    assert {i for i in ids if device.alerts.get(i)} == set(ids) - {first}
+    assert [e.data["alert_id"] for e in events] == [first]
+    stored = await device.alerts._store.async_load()
+    assert {a["id"] for a in stored["alerts"]} == set(ids) - {first}
+
+
 @pytest.mark.parametrize("by", ["alert_id", "tag"])
 async def test_the_service_acknowledges_by_id_or_by_tag(
     hass: HomeAssistant, mqtt_mock: Any, device: Any, by: str

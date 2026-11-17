@@ -330,14 +330,7 @@ class AlertManager:
             for alert in hit:
                 alert["read"] = True
                 await self._publish_alert(alert)
-                self._hass.bus.async_fire(
-                    EVENT_ALERT_ACKNOWLEDGED,
-                    {
-                        "alert_id": alert["id"],
-                        "tag": alert.get("tag"),
-                        "device_id": self._device.device_id,
-                    },
-                )
+                self._fire_acknowledged(alert)
             if hit:
                 await self._save()
         return [a["id"] for a in hit]
@@ -347,23 +340,30 @@ class AlertManager:
 
         An unread alert is acknowledged first, so automations see it as done.
         """
+        removed: list[str] = []
         async with self._lock:
-            removed = self._alerts
-            self._alerts = []
-            for alert in removed:
-                if not alert["read"]:
-                    self._hass.bus.async_fire(
-                        EVENT_ALERT_ACKNOWLEDGED,
-                        {
-                            "alert_id": alert["id"],
-                            "tag": alert.get("tag"),
-                            "device_id": self._device.device_id,
-                        },
-                    )
-                await self._clear(alert)
-            if removed:
-                await self._save()
-        return [a["id"] for a in removed]
+            # One at a time: a failure leaves the rest held and stored.
+            try:
+                for alert in list(self._alerts):
+                    await self._clear(alert)
+                    self._alerts.remove(alert)
+                    removed.append(alert["id"])
+                    if not alert["read"]:
+                        self._fire_acknowledged(alert)
+            finally:
+                if removed:
+                    await self._save()
+        return removed
+
+    def _fire_acknowledged(self, alert: dict[str, Any]) -> None:
+        self._hass.bus.async_fire(
+            EVENT_ALERT_ACKNOWLEDGED,
+            {
+                "alert_id": alert["id"],
+                "tag": alert.get("tag"),
+                "device_id": self._device.device_id,
+            },
+        )
 
     async def async_ack_from_device(self, alert_id: str) -> str:
         """Handle `{ack}` from the device: `ok`, or `denied` for an unknown alert."""
