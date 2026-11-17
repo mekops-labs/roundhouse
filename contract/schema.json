@@ -233,6 +233,14 @@
             "req": {"$ref": "#/$defs/request_id"},
             "ack": {"$ref": "#/$defs/alert_id"}
           }
+        },
+        {
+          "type": "object",
+          "required": ["req", "clear_alerts"],
+          "properties": {
+            "req": {"$ref": "#/$defs/request_id"},
+            "clear_alerts": {"const": true}
+          }
         }
       ]
     },

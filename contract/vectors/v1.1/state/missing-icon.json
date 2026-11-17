@@ -1,0 +1,11 @@
+{
+  "kind": "state",
+  "topic": "roundhouse/tender01/state/light.sufit",
+  "payload": {
+    "text": "On",
+    "on": true,
+    "available": true
+  },
+  "valid": false,
+  "error": "invalid"
+}

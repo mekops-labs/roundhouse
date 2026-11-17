@@ -1,0 +1,17 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r4",
+    "alert": "a1b2c3",
+    "action_id": "open",
+    "confirmed": true
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r4",
+    "alert": "a1b2c3",
+    "action_id": "open",
+    "confirmed": true
+  }
+}

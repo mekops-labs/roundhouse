@@ -1,0 +1,13 @@
+{
+  "kind": "status",
+  "topic": "roundhouse/wall01/status",
+  "payload": {
+    "power_mode": "active"
+  },
+  "valid": true,
+  "decoded": {
+    "battery": null,
+    "charging": null,
+    "power_mode": "active"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "bitmap",
+  "topic": "roundhouse/tender01/alert/a1b2c3/image",
+  "format": "gray4",
+  "width": 4,
+  "height": 2,
+  "payload_hex": "0123fe",
+  "valid": false,
+  "error": "invalid"
+}

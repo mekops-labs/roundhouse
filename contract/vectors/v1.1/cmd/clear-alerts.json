@@ -1,0 +1,13 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r7",
+    "clear_alerts": true
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r7",
+    "clear_alerts": true
+  }
+}

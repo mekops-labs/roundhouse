@@ -384,6 +384,28 @@ async def test_a_device_acknowledgment_marks_the_alert_read_and_fires_the_event(
     assert len(events) == 1
 
 
+async def test_clearing_from_the_device_removes_every_alert(
+    hass: HomeAssistant, mqtt_mock: Any, device: Any
+) -> None:
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_ALERT_ACKNOWLEDGED, events.append)
+    (read_id,) = (await send(hass, tag="gate")).values()
+    (unread_id,) = (await send(hass, tag="door")).values()
+    assert await cmd(hass, mqtt_mock, {"req": "c0", "ack": read_id}) == "ok"
+    events.clear()
+
+    assert await cmd(hass, mqtt_mock, {"req": "c1", "clear_alerts": True}) == "ok"
+    for alert_id in (read_id, unread_id):
+        assert topic_publishes(mqtt_mock, f"alert/{alert_id}")[-1] == b""
+        assert device.alerts.get(alert_id) is None
+    assert device.alerts.unread == 0
+    # Only the unread alert is acknowledged on the way out.
+    assert [e.data["alert_id"] for e in events] == [unread_id]
+
+    # Nothing left: a second clear is still ok.
+    assert await cmd(hass, mqtt_mock, {"req": "c2", "clear_alerts": True}) == "ok"
+
+
 @pytest.mark.parametrize("by", ["alert_id", "tag"])
 async def test_the_service_acknowledges_by_id_or_by_tag(
     hass: HomeAssistant, mqtt_mock: Any, device: Any, by: str

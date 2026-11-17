@@ -1,0 +1,15 @@
+{
+  "kind": "views",
+  "topic": "roundhouse/tender01/views",
+  "payload": {
+    "views": [],
+    "snapshot_view": null,
+    "skipped": 0
+  },
+  "valid": true,
+  "decoded": {
+    "views": [],
+    "snapshot_view": null,
+    "skipped": 0
+  }
+}

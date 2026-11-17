@@ -1,0 +1,7 @@
+{
+  "kind": "announce",
+  "topic": "roundhouse/tender01/announce",
+  "payload_text": "{\"contract\": ",
+  "valid": false,
+  "error": "unparsable"
+}

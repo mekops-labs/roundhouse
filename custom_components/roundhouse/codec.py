@@ -13,6 +13,8 @@ from collections.abc import Callable
 from typing import Any
 
 SUPPORTED_MAJOR = 1
+# The minor version Roundhouse implements, sent in `meta`.
+SUPPORTED_MINOR = 1
 PIXEL_FORMATS = ("gray4", "rgb565")
 BITMAP_FORMATS = ("mask4", "gray4", "rgb565")
 
@@ -374,7 +376,11 @@ def _cmd(doc: Any) -> dict[str, Any]:
         }
     if "ack" in o:
         return {"req": rid, "ack": _pattern(o["ack"], _ALERT_ID, "ack")}
-    raise _fail("cmd", "no entity_id, alert, or ack")
+    if "clear_alerts" in o:
+        if o["clear_alerts"] is not True:
+            raise _fail("clear_alerts", "not true")
+        return {"req": rid, "clear_alerts": True}
+    raise _fail("cmd", "no entity_id, alert, ack, or clear_alerts")
 
 
 def _result(doc: Any) -> dict[str, Any]:

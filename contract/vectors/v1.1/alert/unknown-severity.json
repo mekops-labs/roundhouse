@@ -1,0 +1,14 @@
+{
+  "kind": "alert",
+  "topic": "roundhouse/tender01/alert/a1b2c3",
+  "payload": {
+    "title": "Pralka",
+    "message": "Pranie zakończone.",
+    "severity": "panic",
+    "time": 1792000100,
+    "read": true,
+    "actions": []
+  },
+  "valid": false,
+  "error": "invalid"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r8",
+    "clear_alerts": false
+  },
+  "valid": false,
+  "error": "invalid"
+}

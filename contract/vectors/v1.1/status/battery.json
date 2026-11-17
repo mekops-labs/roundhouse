@@ -1,0 +1,15 @@
+{
+  "kind": "status",
+  "topic": "roundhouse/tender01/status",
+  "payload": {
+    "battery": 82,
+    "charging": false,
+    "power_mode": "sleep"
+  },
+  "valid": true,
+  "decoded": {
+    "battery": 82,
+    "charging": false,
+    "power_mode": "sleep"
+  }
+}

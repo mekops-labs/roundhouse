@@ -1,0 +1,13 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r5",
+    "ack": "a1b2c3"
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r5",
+    "ack": "a1b2c3"
+  }
+}

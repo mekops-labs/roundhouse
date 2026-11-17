@@ -144,7 +144,7 @@ class Device:
         )
         return codec.encode(
             {
-                "contract": f"{codec.SUPPORTED_MAJOR}.0",
+                "contract": f"{codec.SUPPORTED_MAJOR}.{codec.SUPPORTED_MINOR}",
                 "language": self._hass.config.language,
                 "views_hash": views_hash,
             }

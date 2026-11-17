@@ -23,7 +23,7 @@ from custom_components.roundhouse.const import (
     DOMAIN,
 )
 
-VECTORS = Path(__file__).parents[1] / "contract/vectors/v1.0"
+VECTORS = Path(__file__).parents[1] / "contract/vectors/v1.1"
 
 
 def vector(kind: str, name: str) -> dict[str, Any]:

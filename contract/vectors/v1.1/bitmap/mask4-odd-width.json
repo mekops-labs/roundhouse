@@ -1,0 +1,21 @@
+{
+  "kind": "bitmap",
+  "topic": "roundhouse/tender01/icon/mdi_lightbulb",
+  "format": "mask4",
+  "width": 3,
+  "height": 2,
+  "payload_hex": "08f0f800",
+  "pixels": [
+    [
+      0,
+      8,
+      15
+    ],
+    [
+      15,
+      8,
+      0
+    ]
+  ],
+  "valid": true
+}

@@ -61,7 +61,7 @@ async def test_setup_publishes_meta_retained(
     # A new device holds one empty view, "Home".
     assert device.views_payload is not None
     assert json.loads(payload) == {
-        "contract": "1.0",
+        "contract": "1.1",
         "language": hass.config.language,
         "views_hash": layout.definition_hash(device.views_payload),
     }

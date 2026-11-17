@@ -1,0 +1,44 @@
+[
+  {
+    "topic": "roundhouse/tender01/announce",
+    "device_id": "tender01",
+    "name": "announce",
+    "rest": null
+  },
+  {
+    "topic": "roundhouse/tender01/state/light.sufit",
+    "device_id": "tender01",
+    "name": "state",
+    "rest": "light.sufit"
+  },
+  {
+    "topic": "roundhouse/tender01/icon/mdi_ceiling-light",
+    "device_id": "tender01",
+    "name": "icon",
+    "rest": "mdi_ceiling-light"
+  },
+  {
+    "topic": "roundhouse/tender01/alert/a1b2c3",
+    "device_id": "tender01",
+    "name": "alert",
+    "rest": "a1b2c3"
+  },
+  {
+    "topic": "roundhouse/tender01/alert/a1b2c3/image",
+    "device_id": "tender01",
+    "name": "alert",
+    "rest": "a1b2c3/image"
+  },
+  {
+    "topic": "homeassistant/status",
+    "device_id": null,
+    "name": null,
+    "rest": null
+  },
+  {
+    "topic": "roundhouse/tender01",
+    "device_id": null,
+    "name": null,
+    "rest": null
+  }
+]

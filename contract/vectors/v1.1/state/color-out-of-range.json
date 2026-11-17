@@ -1,0 +1,17 @@
+{
+  "kind": "state",
+  "topic": "roundhouse/tender01/state/light.sufit",
+  "payload": {
+    "text": "Off",
+    "on": false,
+    "available": true,
+    "icon": "mdi:lightbulb-off",
+    "color": [
+      256,
+      0,
+      0
+    ]
+  },
+  "valid": false,
+  "error": "invalid"
+}

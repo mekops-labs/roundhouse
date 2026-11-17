@@ -1,0 +1,19 @@
+{
+  "kind": "cmd",
+  "topic": "roundhouse/tender01/cmd",
+  "payload": {
+    "req": "r2",
+    "entity_id": "lock.drzwi",
+    "action": "unlock",
+    "data": {},
+    "confirmed": true
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r2",
+    "entity_id": "lock.drzwi",
+    "action": "unlock",
+    "data": {},
+    "confirmed": true
+  }
+}

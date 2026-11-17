@@ -1,13 +1,13 @@
 # Panel MQTT contract
 
 Schema, encodings, and test vectors for the MQTT contract between Roundhouse
-and a panel device. The current version is **1.0**.
+and a panel device. The current version is **1.1**.
 
 - `schema.json` - JSON Schema (2020-12), one definition per structured topic
   under `$defs`.
 - `ENCODINGS.md` - bitmap encodings and the topic table.
 - `VERSIONING.md` - what each version number allows.
-- `vectors/v1.0/` - test vectors for contract 1.0.
+- `vectors/v1.0/` and `vectors/v1.1/` - test vectors for each version.
 
 All topics sit under `roundhouse/<device_id>/`. Structured payloads are
 compact UTF-8 JSON. Icons and images are raw bytes.

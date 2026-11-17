@@ -1,0 +1,23 @@
+{
+  "kind": "alert",
+  "topic": "roundhouse/tender01/alert/d4e5",
+  "payload": {
+    "title": "Pralka",
+    "message": "Pranie zakończone.",
+    "severity": "event",
+    "time": 1792000100,
+    "read": true,
+    "actions": []
+  },
+  "valid": true,
+  "decoded": {
+    "title": "Pralka",
+    "message": "Pranie zakończone.",
+    "severity": "event",
+    "time": 1792000100,
+    "read": true,
+    "actions": [],
+    "image": null,
+    "thumb": null
+  }
+}

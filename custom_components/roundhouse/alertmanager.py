@@ -342,6 +342,29 @@ class AlertManager:
                 await self._save()
         return [a["id"] for a in hit]
 
+    async def async_clear_all(self) -> list[str]:
+        """Remove every alert of the device; return their IDs.
+
+        An unread alert is acknowledged first, so automations see it as done.
+        """
+        async with self._lock:
+            removed = self._alerts
+            self._alerts = []
+            for alert in removed:
+                if not alert["read"]:
+                    self._hass.bus.async_fire(
+                        EVENT_ALERT_ACKNOWLEDGED,
+                        {
+                            "alert_id": alert["id"],
+                            "tag": alert.get("tag"),
+                            "device_id": self._device.device_id,
+                        },
+                    )
+                await self._clear(alert)
+            if removed:
+                await self._save()
+        return [a["id"] for a in removed]
+
     async def async_ack_from_device(self, alert_id: str) -> str:
         """Handle `{ack}` from the device: `ok`, or `denied` for an unknown alert."""
         if self.get(alert_id) is None:

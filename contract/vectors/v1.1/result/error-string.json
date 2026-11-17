@@ -1,0 +1,13 @@
+{
+  "kind": "result",
+  "topic": "roundhouse/tender01/result",
+  "payload": {
+    "req": "r2",
+    "result": "Service not found"
+  },
+  "valid": true,
+  "decoded": {
+    "req": "r2",
+    "result": "Service not found"
+  }
+}

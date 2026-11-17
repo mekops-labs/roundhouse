@@ -1,0 +1,9 @@
+{
+  "kind": "result",
+  "topic": "roundhouse/tender01/result",
+  "payload": {
+    "req": "r2"
+  },
+  "valid": false,
+  "error": "invalid"
+}

@@ -1,0 +1,97 @@
+{
+  "kind": "state",
+  "topic": "roundhouse/tender01/state/climate.pompa",
+  "payload": {
+    "text": "Heating · 21.5 → 22 °C",
+    "on": true,
+    "available": true,
+    "icon": "mdi:heat-pump",
+    "color": null,
+    "attributes": {
+      "current_temperature": 21.5,
+      "temperature": 22.0,
+      "min_temp": 7,
+      "max_temp": 30,
+      "target_temp_step": 0.5,
+      "hvac_action": {
+        "value": "heating",
+        "label": "Grzanie"
+      },
+      "hvac_mode": {
+        "value": "heat",
+        "label": "Grzanie"
+      },
+      "hvac_modes": [
+        {
+          "value": "heat",
+          "label": "Grzanie"
+        },
+        {
+          "value": "off",
+          "label": "Wyłączony"
+        }
+      ],
+      "preset_mode": {
+        "value": "eco",
+        "label": "Eko"
+      },
+      "preset_modes": [
+        {
+          "value": "eco",
+          "label": "Eko"
+        },
+        {
+          "value": "comfort",
+          "label": "Komfort"
+        }
+      ]
+    }
+  },
+  "valid": true,
+  "decoded": {
+    "text": "Heating · 21.5 → 22 °C",
+    "on": true,
+    "available": true,
+    "icon": "mdi:heat-pump",
+    "color": null,
+    "attributes": {
+      "current_temperature": 21.5,
+      "temperature": 22.0,
+      "min_temp": 7,
+      "max_temp": 30,
+      "target_temp_step": 0.5,
+      "hvac_action": {
+        "value": "heating",
+        "label": "Grzanie"
+      },
+      "hvac_mode": {
+        "value": "heat",
+        "label": "Grzanie"
+      },
+      "hvac_modes": [
+        {
+          "value": "heat",
+          "label": "Grzanie"
+        },
+        {
+          "value": "off",
+          "label": "Wyłączony"
+        }
+      ],
+      "preset_mode": {
+        "value": "eco",
+        "label": "Eko"
+      },
+      "preset_modes": [
+        {
+          "value": "eco",
+          "label": "Eko"
+        },
+        {
+          "value": "comfort",
+          "label": "Komfort"
+        }
+      ]
+    }
+  }
+}

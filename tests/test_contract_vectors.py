@@ -12,7 +12,7 @@ from jsonschema import Draft202012Validator
 from custom_components.roundhouse import codec
 
 CONTRACT = Path(__file__).parents[1] / "contract"
-VECTORS = CONTRACT / "vectors" / "v1.0"
+VECTORS = CONTRACT / "vectors" / "v1.1"
 SCHEMA = json.loads((CONTRACT / "schema.json").read_text())
 JSON_KINDS = (
     "announce",

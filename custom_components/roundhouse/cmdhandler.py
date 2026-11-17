@@ -153,6 +153,9 @@ class CommandHandler:
         if "entity_id" in cmd:
             return await self._execute_entity(cmd)
         alerts = self._device.alerts
+        if "clear_alerts" in cmd:
+            await alerts.async_clear_all()
+            return "ok"
         if "alert" in cmd:
             result = await alerts.async_run_action(
                 cmd["alert"], cmd["action_id"], cmd["confirmed"]

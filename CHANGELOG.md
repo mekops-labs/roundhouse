@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Contract 1.1: a device can clear all its alerts with `clear_alerts`. Unread
+  alerts are acknowledged first. `meta` names 1.1.
+
 ## 0.2.0 (2026-11-14)
 
 ### Changed
