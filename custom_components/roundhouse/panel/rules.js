@@ -80,3 +80,18 @@ export function toggleChoice(item, value) {
   choice.on = !choice.on;
   return true;
 }
+
+// The icons whose name holds every word of `query`, best first: the exact
+// name, then names that start with the query, then the rest in name order.
+export function iconMatches(names, query, limit = 48) {
+  const q = query.trim().toLowerCase().replace(/^mdi:/, "");
+  if (!q) return [];
+  const words = q.split(/[\s-]+/).filter(Boolean);
+  const rank = (name) => (name === q ? 0 : name.startsWith(q) ? 1 : 2);
+  return names
+    .map((full) => full.slice(4))
+    .filter((name) => words.every((w) => name.includes(w)))
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .slice(0, limit)
+    .map((name) => `mdi:${name}`);
+}

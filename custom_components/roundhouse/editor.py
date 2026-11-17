@@ -27,6 +27,7 @@ from .compat import vol
 from .const import (
     DOMAIN,
     WS_DEVICES,
+    WS_EDITOR_ICONS,
     WS_EDITOR_RENDER,
     WS_EDITOR_SAVE,
     WS_EDITOR_SUBSCRIBE,
@@ -363,8 +364,21 @@ async def ws_render(
     connection.send_result(msg["id"], {"states": states, "icons": icons})
 
 
+@ws_decorators.require_admin
+@ws_decorators.websocket_command({vol.Required("type"): WS_EDITOR_ICONS})
+@ws_decorators.async_response
+async def ws_icons(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """List the icons a device can draw, for the page's icon picker."""
+    from . import icons
+
+    await hass.async_add_executor_job(icons.warm)
+    connection.send_result(msg["id"], {"icons": icons.names()})
+
+
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
     """Register the admin-only websocket commands."""
-    for command in (ws_devices, ws_subscribe, ws_save, ws_render):
+    for command in (ws_devices, ws_subscribe, ws_save, ws_render, ws_icons):
         websocket_api.async_register_command(hass, command)

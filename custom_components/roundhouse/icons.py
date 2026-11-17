@@ -89,6 +89,11 @@ def warm() -> None:
     _names()
 
 
+def names() -> list[str]:
+    """Return every bundled icon as `mdi:<name>`, sorted. Call `warm` first."""
+    return sorted(f"mdi:{n}" for n in _names())
+
+
 def known(name: str) -> bool:
     """Return whether `name` (`mdi:...`) is an icon of the bundled font."""
     return name.startswith("mdi:") and name[4:] in _names()

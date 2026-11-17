@@ -4,6 +4,8 @@
 
 ### Added
 
+- The tile dialog picks an icon from a searchable grid of the icons the device
+  can draw. WebSocket command `roundhouse/editor/icons` lists them.
 - Contract 1.1: a device can clear all its alerts with `clear_alerts`. Unread
   alerts are acknowledged first. `meta` names 1.1.
 

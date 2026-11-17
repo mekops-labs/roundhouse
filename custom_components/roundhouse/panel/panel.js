@@ -693,12 +693,27 @@ class RoundhousePanel extends HTMLElement {
       rules: snapshot.rules,
       model: () => this._drawModel(),
       render: (entities) => this._renderEntities(entities),
+      icons: () => this._iconNames(),
       closed: () => this._scheduleDraftRender(),
       drawIcon,
       slotRect: slotRects(profile, view)[0],
       snapshot: this._draft?.snapshot,
       sleeps: (profile.features ?? []).includes("sleep"),
     };
+  }
+
+  // The icons a device can draw, fetched once for the page.
+  _iconNames() {
+    if (!this._icons) {
+      this._icons = this._hass.callWS({ type: "roundhouse/editor/icons" }).then(
+        (r) => r.icons,
+        () => {
+          this._icons = null; // try again with the next search
+          return [];
+        },
+      );
+    }
+    return this._icons;
   }
 
   _addView() {

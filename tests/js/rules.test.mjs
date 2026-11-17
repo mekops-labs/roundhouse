@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  iconMatches,
   buildControls,
   controlItems,
   domainOf,
@@ -160,4 +161,13 @@ test("the last mode that is on cannot be switched off", () => {
   assert.equal(toggleChoice(item, "off"), false);
   assert.deepEqual(item.choices.map((c) => c.on), [false, false, true]);
   assert.equal(toggleChoice(item, "heat"), true);
+});
+
+test("icons match every word of the query, the exact name first", () => {
+  const names = ["mdi:lamp", "mdi:desk-lamp", "mdi:floor-lamp", "mdi:lamps", "mdi:lightbulb"];
+  assert.deepEqual(iconMatches(names, "lamp"), ["mdi:lamp", "mdi:lamps", "mdi:desk-lamp", "mdi:floor-lamp"]);
+  assert.deepEqual(iconMatches(names, "floor lamp"), ["mdi:floor-lamp"]);
+  assert.deepEqual(iconMatches(names, "mdi:desk"), ["mdi:desk-lamp"]);
+  assert.deepEqual(iconMatches(names, "  "), []);
+  assert.equal(iconMatches(names, "l", 2).length, 2);
 });

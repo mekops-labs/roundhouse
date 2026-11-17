@@ -29,8 +29,9 @@ the slot count do not.
 - Select the pencil to edit. Changes stay a draft until you select **Done**.
 - Each view has a layout that you choose from the device's own. A view takes no
   more tiles than its layout has slots.
-- A tile is one entity of a supported domain. Its dialog offers a name, an icon,
-  and the controls of the entity's detail page on the device.
+- A tile is one entity of a supported domain. Its dialog offers a name, an icon
+  picked from the icons the device can draw, and the controls of the entity's
+  detail page on the device.
 - The header shows the running Roundhouse version and links to its changelog.
 
 ## Entities

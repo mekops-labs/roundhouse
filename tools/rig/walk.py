@@ -39,7 +39,7 @@ async def settle(page: Page, ms: int = 400) -> None:
 
 async def pick_entity(page: Page, query: str) -> None:
     dialog = page.locator("dialog[open]")
-    await dialog.locator('input[type="search"]').fill(query)
+    await dialog.locator('input[aria-label="Search entities"]').fill(query)
     await dialog.locator(".results button").first.click()
     await settle(page, 600)
 
@@ -115,11 +115,21 @@ async def main() -> None:
         await page.locator('dialog[open] label:has-text("Name") input').fill(
             "Porch light"
         )
-        await page.locator('dialog[open] label:has-text("Icon") input').fill("mdi:star")
-        await page.locator('dialog[open] label:has-text("Icon") input').dispatch_event(
-            "change"
+        await page.locator('dialog[open] input[aria-label="Search icons"]').fill("star")
+        await settle(page, 600)
+        choices = page.locator("dialog[open] .icon-grid button")
+        check(
+            "the icon search offers matching icons",
+            await choices.count() > 1
+            and await page.locator(
+                'dialog[open] .icon-grid button[title="mdi:star"]'
+            ).count()
+            == 1,
+            await choices.count(),
         )
+        await page.locator('dialog[open] .icon-grid button[title="mdi:star"]').click()
         await settle(page, 800)
+        await page.screenshot(path=str(out / "walk-icon-picker.png"))
         await save_dialog(page)
         tile = await panel(page, "panel._draft.views[0].tiles[9]")
         check(

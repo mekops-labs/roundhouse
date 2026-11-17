@@ -2,8 +2,8 @@
 // like Home Assistant's own dialogs.
 
 import { drawTile } from "./draw.js";
-import { h } from "./dom.js";
-import { buildControls, controlItems, entityOptions, tileLabel, toggleChoice, toggleItem } from "./rules.js";
+import { h, icon as iconEl } from "./dom.js";
+import { buildControls, controlItems, entityOptions, iconMatches, tileLabel, toggleChoice, toggleItem } from "./rules.js";
 
 export const DIALOG_STYLE = `
   dialog { border: none; border-radius: var(--ha-card-border-radius, 12px); padding: 0; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); background: var(--card-background-color, #fff); color: var(--primary-text-color); box-shadow: 0 8px 32px rgba(0,0,0,.35); }
@@ -31,6 +31,13 @@ export const DIALOG_STYLE = `
   .text-button.primary { background: var(--primary-color); color: var(--text-primary-color, #fff); }
   .text-button.danger { color: var(--error-color, #d32f2f); margin-right: auto; }
   .text-button:disabled { opacity: .45; cursor: default; }
+  .icon-now { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--divider-color, #ccc); border-radius: 4px; --mdc-icon-size: 24px; }
+  .icon-now .grow { flex: 1; }
+  .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; max-height: 188px; overflow: auto; }
+  .icon-grid:empty { display: none; }
+  .icon-choice { height: 44px; padding: 0; border: 1px solid var(--divider-color, #ccc); border-radius: 4px; background: transparent; color: inherit; cursor: pointer; overflow: hidden; font-size: 9px; --mdc-icon-size: 24px; }
+  .icon-choice:hover, .icon-choice:focus-visible { background: var(--secondary-background-color, #eee); }
+  .icon-choice.on { outline: 2px solid var(--primary-color); }
 `;
 
 const CONTROL_LABELS = {
@@ -70,12 +77,15 @@ const button = (text, extra, onClick, props = {}) =>
   h("button", { className: `text-button ${extra}`.trim(), type: "button", textContent: text, on: { click: onClick }, ...props });
 
 // Edit one tile. `ctx` supplies hass, profile, rules, the view, the model,
-// `render` for entities the model lacks, and `drawIcon`.
+// `render` for entities the model lacks, `icons`, and `drawIcon`.
 export function tileDialog(ctx, tile, onSave) {
   let entity = tile?.entity_id ?? null;
   let items = entity ? controlItems(ctx.rules, entity, ctx.hass.states[entity], tile?.controls) : [];
   const nameInput = h("input", { type: "text", maxLength: 32, value: tile?.name ?? "" });
-  const iconInput = h("input", { type: "text", value: tile?.icon ?? "", placeholder: "mdi:lightbulb" });
+  let icon = tile?.icon ?? "";
+  const iconNow = h("div", { className: "icon-now" });
+  const iconSearch = h("input", { type: "search", placeholder: "Search icons", ariaLabel: "Search icons" });
+  const iconGrid = h("div", { className: "icon-grid", role: "listbox", ariaLabel: "Icons" });
   const iconHint = h("p", { className: "hint" });
   const search = h("input", { type: "search", placeholder: "Search entities", ariaLabel: "Search entities" });
   const results = h("ul", { className: "results" });
@@ -86,7 +96,7 @@ export function tileDialog(ctx, tile, onSave) {
     const controlsOut = buildControls(items);
     const out = { entity_id: entity };
     if (nameInput.value.trim()) out.name = nameInput.value.trim();
-    if (iconInput.value.trim()) out.icon = iconInput.value.trim();
+    if (icon) out.icon = icon;
     if (controlsOut) out.controls = controlsOut;
     dlg.close();
     onSave(out);
@@ -102,22 +112,47 @@ export function tileDialog(ctx, tile, onSave) {
     const g = canvas.getContext("2d");
     g.clearRect(0, 0, rect.w, rect.h);
     if (!entity) return;
-    const shown = { entity_id: entity, name: nameInput.value, icon: iconInput.value };
+    const shown = { entity_id: entity, name: nameInput.value, icon };
     shown.label = tileLabel(shown, ctx.hass.states);
     drawTile(g, ctx.profile, ctx.model(), shown, { x: 0, y: 0, w: rect.w, h: rect.h }, { drawIcon: ctx.drawIcon });
   };
 
   const refresh = async () => {
     if (!entity) return;
-    await ctx.render({ [entity]: iconInput.value.trim() || null });
+    await ctx.render({ [entity]: icon || null });
+    showIcon();
     preview();
   };
 
-  const showIconHint = () => {
-    const value = iconInput.value.trim();
-    iconHint.className = value && !value.startsWith("mdi:") ? "hint bad" : "hint";
+  // The chosen icon, or the entity's own one as the default.
+  const showIcon = () => {
     const fallback = entity ? ctx.model().states[entity]?.icon : null;
-    iconHint.textContent = value && !value.startsWith("mdi:") ? "Use an mdi: icon name." : fallback ? `Default: ${fallback}` : "";
+    const shown = icon || fallback;
+    iconNow.replaceChildren(
+      shown ? iconEl(shown, "") : null,
+      h("span", { className: "grow", textContent: icon || (fallback ? `Default (${fallback})` : "Default") }),
+      icon ? button("Use default", "", () => pick("")) : null,
+    );
+  };
+
+  const pick = (name) => {
+    icon = name;
+    showIcon();
+    showIcons();
+    refresh();
+  };
+
+  // Only icons the device can draw are offered, so no name can be wrong.
+  const showIcons = async () => {
+    const query = iconSearch.value;
+    const found = iconMatches(await ctx.icons(), query);
+    if (query !== iconSearch.value) return; // a newer search is on its way
+    iconGrid.replaceChildren(
+      ...found.map((name) =>
+        h("button", { type: "button", className: name === icon ? "icon-choice on" : "icon-choice", title: name, ariaLabel: name, on: { click: () => pick(name) } }, iconEl(name, name.slice(4))),
+      ),
+    );
+    iconHint.textContent = !query.trim() ? "Type to search the icons the device can draw." : found.length ? "" : "No icon matches.";
   };
 
   const showControls = () => {
@@ -173,7 +208,7 @@ export function tileDialog(ctx, tile, onSave) {
           items = controlItems(ctx.rules, entity, ctx.hass.states[entity], undefined);
           showPicked();
           showControls();
-          showIconHint();
+          showIcon();
           refresh();
         } } }, o.name, h("small", { textContent: o.entity_id }))),
       ),
@@ -182,8 +217,7 @@ export function tileDialog(ctx, tile, onSave) {
 
   search.addEventListener("input", showResults);
   nameInput.addEventListener("input", preview);
-  iconInput.addEventListener("input", showIconHint);
-  iconInput.addEventListener("change", refresh);
+  iconSearch.addEventListener("input", showIcons);
 
   const dlg = open(
     ctx,
@@ -191,7 +225,7 @@ export function tileDialog(ctx, tile, onSave) {
     [
       h("div", { className: "field" }, h("span", { textContent: "Entity" }), picked, search, results),
       h("label", { className: "field" }, h("span", { textContent: "Name (optional)" }), nameInput),
-      h("label", { className: "field" }, h("span", { textContent: "Icon (optional)" }), iconInput, iconHint),
+      h("div", { className: "field" }, h("span", { textContent: "Icon (optional)" }), iconNow, iconSearch, iconGrid, iconHint),
       controls,
       h("div", { className: "preview" }, canvas),
     ],
@@ -200,7 +234,8 @@ export function tileDialog(ctx, tile, onSave) {
   showPicked();
   showResults();
   showControls();
-  showIconHint();
+  showIcon();
+  showIcons();
   refresh();
 }
 

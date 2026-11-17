@@ -304,6 +304,21 @@ async def test_the_render_command_renders_entities_not_saved_yet(
     await advance(hass, STALE_SETTLE_SECONDS + 1)
 
 
+async def test_the_icon_list_holds_the_bundled_icons(
+    hass: HomeAssistant,
+    hass_ws_client: Any,
+    mqtt_mock: Any,
+    tender_profile: dict[str, Any],
+) -> None:
+    await setup(hass, tender_profile, config(("home", [])))
+    client = await hass_ws_client(hass)
+    names = (await call(client, {"type": "roundhouse/editor/icons"}))["icons"]
+    assert "mdi:lightbulb" in names and "mdi:star" in names
+    assert names == sorted(names) and len(names) > 5000
+    assert all(n.startswith("mdi:") for n in names)
+    await advance(hass, STALE_SETTLE_SECONDS + 1)
+
+
 async def test_the_render_command_refuses_a_big_batch(
     hass: HomeAssistant,
     hass_ws_client: Any,
