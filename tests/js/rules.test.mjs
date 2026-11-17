@@ -171,3 +171,14 @@ test("icons match every word of the query, the exact name first", () => {
   assert.deepEqual(iconMatches(names, "  "), []);
   assert.equal(iconMatches(names, "l", 2).length, 2);
 });
+
+test("a query with spaces ranks the hyphenated name first, past the limit", () => {
+  const names = [
+    ...Array.from({ length: 60 }, (_, i) => `mdi:a${String(i).padStart(2, "0")}-lock-outline`),
+    "mdi:lock-outline",
+    "mdi:lock-outline-off",
+  ];
+  const found = iconMatches(names, "lock outline");
+  assert.deepEqual(found.slice(0, 2), ["mdi:lock-outline", "mdi:lock-outline-off"]);
+  assert.equal(found.length, 48);
+});

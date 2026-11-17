@@ -372,3 +372,36 @@ test("a large draft is rendered in batches the integration accepts", async () =>
   const sizes = calls.filter((c) => c.type === "roundhouse/editor/render").map((c) => Object.keys(c.entities).length);
   assert.deepEqual(sizes, [64, 6]);
 });
+
+test("a late render reply for an older icon does not replace the newer one", async () => {
+  const { el } = await editor();
+  el._edit();
+  const replies = [];
+  el._hass.callWS = (msg) =>
+    new Promise((resolve) => {
+      if (msg.type !== "roundhouse/editor/render") return resolve({});
+      const icon = msg.entities["light.a"];
+      replies.push(() => resolve({ states: { "light.a": { icon, text: "On" } }, icons: {} }));
+    });
+  const star = el._renderEntities({ "light.a": "mdi:star" });
+  const lamp = el._renderEntities({ "light.a": "mdi:lamp" });
+  replies[1]();
+  assert.equal(await lamp, true);
+  replies[0]();
+  assert.equal(await star, false, "the older reply is not taken");
+  assert.equal(el._drawModel().states["light.a"].icon, "mdi:lamp");
+});
+
+test("a failed icon list load is an error the next search retries", async () => {
+  const { el } = await editor();
+  let calls = 0;
+  el._hass.callWS = async (msg) => {
+    if (msg.type !== "roundhouse/editor/icons") return {};
+    calls += 1;
+    if (calls === 1) throw new Error("lost connection");
+    return { icons: ["mdi:star"] };
+  };
+  await assert.rejects(el._iconNames(), /lost connection/);
+  assert.deepEqual(await el._iconNames(), ["mdi:star"]);
+  assert.equal(calls, 2);
+});

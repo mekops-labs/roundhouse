@@ -82,16 +82,17 @@ export function toggleChoice(item, value) {
 }
 
 // The icons whose name holds every word of `query`, best first: the exact
-// name, then names that start with the query, then the rest in name order.
+// name, then names that start with the query, then the rest. `names` comes
+// sorted, so each group keeps name order. Spaces read as hyphens.
 export function iconMatches(names, query, limit = 48) {
-  const q = query.trim().toLowerCase().replace(/^mdi:/, "");
-  if (!q) return [];
-  const words = q.split(/[\s-]+/).filter(Boolean);
-  const rank = (name) => (name === q ? 0 : name.startsWith(q) ? 1 : 2);
-  return names
-    .map((full) => full.slice(4))
-    .filter((name) => words.every((w) => name.includes(w)))
-    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-    .slice(0, limit)
-    .map((name) => `mdi:${name}`);
+  const words = query.trim().toLowerCase().replace(/^mdi:/, "").split(/[\s-]+/).filter(Boolean);
+  if (!words.length) return [];
+  const key = words.join("-");
+  const groups = [[], [], []];
+  for (const full of names) {
+    const name = full.slice(4);
+    if (!words.every((w) => name.includes(w))) continue;
+    groups[name === key ? 0 : name.startsWith(key) ? 1 : 2].push(full);
+  }
+  return groups.flat().slice(0, limit);
 }

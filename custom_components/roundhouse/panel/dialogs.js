@@ -117,16 +117,22 @@ export function tileDialog(ctx, tile, onSave) {
     drawTile(g, ctx.profile, ctx.model(), shown, { x: 0, y: 0, w: rect.w, h: rect.h }, { drawIcon: ctx.drawIcon });
   };
 
+  // The icon override the last render that came back was made with; the
+  // model holds the entity's default icon only after one made without.
+  let renderedWith = null;
+
   const refresh = async () => {
     if (!entity) return;
-    await ctx.render({ [entity]: icon || null });
+    const asked = { entity, icon };
+    const ok = await ctx.render({ [entity]: icon || null });
+    if (ok && asked.entity === entity && asked.icon === icon) renderedWith = icon;
     showIcon();
     preview();
   };
 
   // The chosen icon, or the entity's own one as the default.
   const showIcon = () => {
-    const fallback = entity ? ctx.model().states[entity]?.icon : null;
+    const fallback = entity && renderedWith === "" ? ctx.model().states[entity]?.icon : null;
     const shown = icon || fallback;
     iconNow.replaceChildren(
       shown ? iconEl(shown, "") : null,
@@ -137,6 +143,7 @@ export function tileDialog(ctx, tile, onSave) {
 
   const pick = (name) => {
     icon = name;
+    renderedWith = null;
     showIcon();
     showIcons();
     refresh();
@@ -145,7 +152,16 @@ export function tileDialog(ctx, tile, onSave) {
   // Only icons the device can draw are offered, so no name can be wrong.
   const showIcons = async () => {
     const query = iconSearch.value;
-    const found = iconMatches(await ctx.icons(), query);
+    let names;
+    try {
+      names = await ctx.icons();
+    } catch (err) {
+      iconHint.className = "hint bad";
+      iconHint.textContent = `Cannot load the icons: ${err?.message ?? err}`;
+      return;
+    }
+    iconHint.className = "hint";
+    const found = iconMatches(names, query);
     if (query !== iconSearch.value) return; // a newer search is on its way
     iconGrid.replaceChildren(
       ...found.map((name) =>
@@ -188,11 +204,13 @@ export function tileDialog(ctx, tile, onSave) {
       h("div", { className: "chip" }, h("span", {}, name, h("br"), h("small", { textContent: entity })), button("Change", "", () => {
         entity = null;
         items = [];
+        renderedWith = null;
         search.hidden = false;
         results.hidden = false;
         showPicked();
         showResults();
         showControls();
+        showIcon();
         preview();
       })),
     );
@@ -206,6 +224,7 @@ export function tileDialog(ctx, tile, onSave) {
         h("li", {}, h("button", { type: "button", on: { click: () => {
           entity = o.entity_id;
           items = controlItems(ctx.rules, entity, ctx.hass.states[entity], undefined);
+          renderedWith = null;
           showPicked();
           showControls();
           showIcon();

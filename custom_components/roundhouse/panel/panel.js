@@ -143,7 +143,8 @@ class RoundhousePanel extends HTMLElement {
     this._renderTimer = 0;
     // States rendered for the draft only, drawn over the saved ones.
     this._preview = { snapshot: null, states: {}, icons: {} };
-    this._drafted = {}; // entity -> { state, icon } last rendered into the preview
+    this._drafted = {}; // entity -> { state, icon, seq } last asked for the preview
+    this._renderSeq = 0;
     this._beforeUnload = (event) => {
       if (this._dirty()) {
         event.preventDefault();
@@ -438,19 +439,25 @@ class RoundhousePanel extends HTMLElement {
   }
 
   // Render entities into the draft's preview, which view mode never draws.
+  // Replies may come back out of order: an entity takes only the reply to the
+  // latest request for it. True when this request's states were taken.
   async _renderEntities(entities) {
-    for (const [id, icon] of Object.entries(entities)) this._drafted[id] = { state: this._hass.states[id], icon };
+    const seq = ++this._renderSeq;
+    for (const [id, icon] of Object.entries(entities)) this._drafted[id] = { state: this._hass.states[id], icon, seq };
     try {
       const result = await this._hass.callWS({
         type: "roundhouse/editor/render",
         device_id: this._deviceId,
         entities,
       });
-      if (!this._draft) return;
-      this._preview = mergeRender(this._preview, result);
+      if (!this._draft) return false;
+      const states = Object.fromEntries(Object.entries(result.states).filter(([id]) => this._drafted[id]?.seq === seq));
+      this._preview = mergeRender(this._preview, { states, icons: result.icons });
       this._schedule();
+      return Object.keys(states).length === Object.keys(entities).length;
     } catch {
       // A tile without a rendered state shows an ellipsis; nothing else breaks.
+      return false;
     }
   }
 
@@ -707,9 +714,9 @@ class RoundhousePanel extends HTMLElement {
     if (!this._icons) {
       this._icons = this._hass.callWS({ type: "roundhouse/editor/icons" }).then(
         (r) => r.icons,
-        () => {
+        (err) => {
           this._icons = null; // try again with the next search
-          return [];
+          throw err;
         },
       );
     }
